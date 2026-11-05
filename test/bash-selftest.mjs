@@ -391,6 +391,13 @@ console.log('== 19. 中途晋升为后台（ops 的 promoted 语义）==')
         const done = await run.done
         ok('取消后任务结束', done.status === 'failed' || done.exitCode !== 0, JSON.stringify(done))
 
+        let fgJob = null
+        let removedJob = null
+        const jobs2 = { start(options) { fgJob = options; return 'job-fg' }, remove(id) { removedJob = id } }
+        const defFg = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6, getJobs: () => jobs2 })[0]
+        const fgText = await defFg.execute({ command: 'echo hi' })
+        ok('前台命令也先登记成 job（可单独停止）', fgJob !== null && fgJob.kind === 'bash' && /ok=true/.test(fgText), JSON.stringify({ kind: fgJob?.kind }))
+        ok('正常结束后从任务列表移除', removedJob === 'job-fg', JSON.stringify({ removedJob }))
         const def2 = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6 })[0]
         const killed = await def2.execute({ command: 'sleep 5', timeoutMs: 300 })
         ok('没有 jobs 服务时仍按超时杀掉', /timedOut=true/.test(killed), killed.slice(0, 140))
