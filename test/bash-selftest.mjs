@@ -212,6 +212,12 @@ console.log('== 13. 隐藏宿主 pwsh（Windows，省常驻 schema）==')
     const restricted = { name: 'a4', session: {}, ctx: { get: (service) => (service === 'tools' ? toolsFor('a4') : (service === 'sandboxPolicy' ? { resolve: () => ({ mode: 'workspace-write' }) } : undefined)) } }
     handlers['agent/created']?.({ agent: restricted })
     ok('受限会话保留 pwsh（不隐藏）', calls.every((call) => call.agent !== 'a4'), JSON.stringify(calls.map((call) => call.agent)))
+    // restrict() 永久失败（例如 unknown global tool）只记一次，不反复重试
+    const before = logs.length
+    const broken = { name: 'a5', session: {}, ctx: { get: (service) => (service === 'sandboxPolicy' ? { resolve: () => ({ mode: 'danger-full-access' }) } : (service === 'tools' ? { get: () => ({}), restrict: () => { throw new Error('unknown global tool "pwsh"') } } : undefined)) } }
+    handlers['agent/created']?.({ agent: broken })
+    handlers['agent/created']?.({ agent: broken })
+    ok('restrict 永久失败只记一次日志', logs.slice(before).filter((line) => /hiding failed/.test(line)).length === 1, logs.slice(before).join(' | '))
     handlers['agent/disposed']?.({ agent: second })
     ok('会话销毁时还原', disposed.includes('a2'), disposed.join(','))
     cleanup?.()

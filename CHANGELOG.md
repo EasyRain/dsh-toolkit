@@ -32,6 +32,7 @@
 - 文档：`docs/TOOLKIT.md` 新增 `## shell`（含四条限制：非交互/无 PTY/MSYS 根映射/路径转换）；README ×2、locale ×2、设置页文案同步为"六族 14 个工具 / 6 个开关"。
 - **一键安装 + 开关自锁**：设置页「Bash 执行器」行右侧给**两个安装按钮**（国内镜像 npmmirror / GitHub 官方，**不做代理探测**，用户自己选）；装的是**用户级 PortableGit**（`%LOCALAPPDATA%\dsh-toolkit\git`，`PortableGit-*.7z.exe -y -o<dir>` 静默解压，实测 60 MB / 2.7 s 下载 + 11.7 s 解压），装完删安装包并**重新探测**（不信退出码）。
   宿主经 `webServer` 注册 `/dsh-toolkit/bash/{status,install}`（`install` 仅 POST + 同源校验）；客户端探测不到 bash 时**禁用该开关**并显示原因/按钮。实现：`lib/shell/{sources,install,routes}.js` + `lib/client.js`。
+- **上游跟踪（同日）**：读到 dsh-ops 的 PR #653（`restrict()` 只能遮全局名，own-scope 注册遮不住）与 #659（外部所有的 workspace 只要已授予 `WRITE_OWNER` 就应放行）—— 前者对应我们的 `host-shell`，已给永久失败加去重（同一 agent 只记一次、不重试）；后者正是本机 `dsh-toolkit` 缺 Low 完整性标签的同类问题（外来所有者），报错与修法见 TOOLKIT。
 - **平台收口（同日）**：`bash` 只在 Windows 注册；POSIX 上宿主自带 `bash`，同名会撞车 ⇒ `apply()` 直接让位（返回 0）。顺带确认了宿主 UI 的工具标题机制：`TOOL_VARIANTS` 把 `bash`/`pwsh` 映射到「运行命令」，未知名字（如 `ops_bash`）落到「调用工具」。
 - **沙箱闸门（同日）**：非 `danger-full-access` 会话现在必须过宿主 `sandboxPolicy.resolve` + `sandbox.confine`，用受限 argv 执行；拿不到 confinement 或结果无效 ⇒ **拒绝执行**（`SANDBOX_UNAVAILABLE`，命令未跑）。
   **Windows 受限模式**：系统 Git Bash 在沙箱里起不来（MSYS 信号管道被拒，`0xC0000142`）⇒ **复用 dsh-ops 的私有 MSYS**（`confinedBash()` + `@dsh-ops/bash-win32-x64`，首次约 174 MB 复制量）再走 `sandbox.confine`；dsh-ops 缺失时明确拒绝。受限会话**不再隐藏 pwsh**（否则一个 shell 都没有）。
