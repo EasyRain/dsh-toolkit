@@ -528,5 +528,20 @@ console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
     finally { rmSync(dir9, { recursive: true, force: true }) }
 }
 
+console.log('== 24. 宿主 terminal 卡片契约 ==')
+{
+    const def = tools((tool) => tool, { resolveWorkspaceCwd: () => tmpdir() })[0]
+    ok('description 必填（卡片据此判定非 persistent）', def.parameters.description?.required === true)
+    const okText = await def.execute({ command: 'echo card', description: 'card' })
+    ok('成功回执以 [exit code: 0] 结尾', okText.trimEnd().endsWith('[exit code: 0]'), okText.slice(-40))
+    const bad = await def.execute({ command: 'exit 7', description: 'card' })
+    ok('非零回执以 [exit code: 7] 结尾', bad.trimEnd().endsWith('[exit code: 7]'), bad.slice(-40))
+    const controller = new AbortController()
+    const pending = def.execute({ command: 'sleep 5', description: 'card' }, { signal: controller.signal })
+    setTimeout(() => controller.abort(), 150)
+    const cancelled = await pending
+    ok('取消回执也带进程结局标记', /\[(exit code: -?\d+|killed by signal: [^\]]+)\]$/.test(cancelled.trimEnd()), cancelled.slice(-60))
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
 process.exitCode = failures === 0 ? 0 : 1
