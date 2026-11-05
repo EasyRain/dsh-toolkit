@@ -45,6 +45,7 @@
 - **总预算**：单文件默认 1 MB，**一次调用合计 2 MB**（多文件共享；用尽后剩余文件直接报"预算用尽，分批读"）。
 - **write**：整文件写 UTF-8（`bom:true` 加 BOM）；**原子写**（同目录临时文件 + rename）。
 - **edit**：若干 `{oldText,newText}`，**每段必须唯一命中、且互不重叠**，否则整单失败（不做部分应用）；按原编码写回、保留 BOM 与 CRLF。**GB18030 无法编码 ⇒ 明确拒绝**（先转 UTF-8，别悄悄改编码）。
+- **replace**：`pattern`（**字面**文本，不是正则）+ `replacement`，对 `path` / `paths`（文件 / 目录 / glob）批量替换；**默认只预览**（`dryRun:true`，报每个文件几处、在哪几行），要真写必须 `dryRun:false`。二进制跳过；GB18030 文件命中会拒绝（先转 UTF-8）；一次最多扫 50 个文件。
 - **CAS**：`expectedRevision` 传上次回执里的 sha256，或 `"absent"` 表示"只新建" ⇒ 防"读到旧内容再覆盖"。冲突时回执带**当前** revision，照着重读再改。
 - **copy / move**：`to` 与 `path` 同一基准；默认不覆盖（`overwrite:true` 才覆盖）；move 跨卷失败会退化成"复制 + 删源"并在回执里说明。
 - **remove**：默认只**预览**（`dryRun`）；真删要 `confirm:true`，目录还要 `recursive:true`；盘根/家目录直接拒绝。

@@ -87,7 +87,7 @@ ok('每个工具都声明了 output.render', noRender.length === 0, noRender.joi
 // 谁加了/删了参数而没同步这份清单，这里就红（加参数时顺手更新本表即可）。
 const EXPECTED_PARAMS = {
     bash: ['command', 'cwd', 'timeoutMs'],
-    file: ['action', 'path', 'paths', 'ranges', 'encoding', 'maxBytes', 'content', 'bom', 'edits', 'expectedRevision', 'to', 'overwrite', 'recursive', 'confirm', 'createParents'],
+    file: ['action', 'path', 'paths', 'ranges', 'encoding', 'maxBytes', 'content', 'bom', 'edits', 'pattern', 'replacement', 'dryRun', 'expectedRevision', 'to', 'overwrite', 'recursive', 'confirm', 'createParents'],
     ast_dump_tree: ['code', 'language', 'format', 'max_nodes', 'max_depth'],
     ast_test_rule: ['code', 'yaml'],
  // ast_grep_help 已并入 toolkit_help（工具面收敛），不再是独立工具

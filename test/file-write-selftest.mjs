@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const { writeFileOp, editFileOp, copyFileOp, moveFileOp, removeFileOp, mkdirOp, statOp, currentRevision } = await import('../lib/file/write.js')
+const { writeFileOp, editFileOp, copyFileOp, moveFileOp, removeFileOp, mkdirOp, statOp, currentRevision, replaceInFileOp } = await import('../lib/file/write.js')
 const { tools } = await import('../lib/file/index.js')
 
 let failures = 0
@@ -98,15 +98,38 @@ try {
     const st = statOp({ path: src })
     ok('stat 返回大小/时间/revision', st.ok === true && st.size === 7 && st.isFile === true && /^[0-9a-f]{64}$/.test(st.revision), JSON.stringify(st))
 
-    console.log('== 4. 工具形状 ==')
+    console.log('== 4. replace（字面批量替换，默认只预览）==')
+    {
+        const repl = join(dir, 'repl')
+        mkdirSync(repl, { recursive: true })
+        const a = join(repl, 'a.txt')
+        writeFileSync(a, 'foo bar foo\nbaz foo\n', 'utf8')
+        writeFileSync(join(repl, 'b.txt'), 'nothing here\n', 'utf8')
+        writeFileSync(join(repl, 'bin.dat'), Buffer.from([0x00, 0x66, 0x6f, 0x6f]))
+
+        const preview = replaceInFileOp({ path: a, pattern: 'foo', replacement: 'FOO' })
+        ok('默认 dryRun：报 3 处 + 行号，但不写盘', preview.ok === true && preview.dryRun === true && preview.matches === 3 && preview.lines[0] === 1 && readFileSync(a, 'utf8').includes('foo'), JSON.stringify(preview))
+        const applied = replaceInFileOp({ path: a, pattern: 'foo', replacement: 'FOO', dryRun: false })
+        ok('dryRun:false 才写盘并回 revision', applied.ok === true && readFileSync(a, 'utf8') === 'FOO bar FOO\nbaz FOO\n' && /^[0-9a-f]{64}$/.test(applied.revision), JSON.stringify(applied))
+        ok('二进制跳过', replaceInFileOp({ path: join(repl, 'bin.dat'), pattern: 'foo' }).skipped === true)
+        ok('空 pattern 被拒', replaceInFileOp({ path: a, pattern: '', dryRun: false }).ok === false)
+
+        const tool = tools((def) => def, { resolveWorkspaceCwd: () => dir })[0]
+        const text = await tool.execute({ action: 'replace', paths: [repl], pattern: 'FOO', replacement: 'X' })
+        ok('工具级 replace 默认预览并列出命中文件', /dryRun=true/.test(text) && /a\.txt: 3 处/.test(text), text)
+        const written = await tool.execute({ action: 'replace', paths: [repl], pattern: 'FOO', replacement: 'X', dryRun: false })
+        ok('工具级 dryRun:false 写盘', /已写入/.test(written) && readFileSync(a, 'utf8') === 'X bar X\nbaz X\n', written)
+    }
+
+    console.log('== 5. 工具形状 ==')
     {
         const seen = []
         const def = tools((d) => { seen.push(d); return d }, { resolveWorkspaceCwd: () => 'D:/DshWorkSpace/Addons' })[0]
         ok('只注册 1 个工具', seen.length === 1)
         ok('名字是 file', def.name === 'file')
-        ok('action 是唯一必填且含 8 个动作', def.parameters.action.required === true && def.parameters.action.enum.length === 8, JSON.stringify(def.parameters.action.enum))
-        ok('8 个动作都写进了描述', def.parameters.action.enum.every((item) => def.description.includes(item)))
-        ok('关键参数齐全', ['path', 'paths', 'ranges', 'encoding', 'content', 'edits', 'expectedRevision', 'to', 'overwrite', 'recursive', 'confirm'].every((key) => key in def.parameters), Object.keys(def.parameters).join(','))
+        ok('action 是唯一必填且含 9 个动作', def.parameters.action.required === true && def.parameters.action.enum.length === 9, JSON.stringify(def.parameters.action.enum))
+        ok('9 个动作都写进了描述', def.parameters.action.enum.every((item) => def.description.includes(item)))
+        ok('关键参数齐全', ['path', 'paths', 'ranges', 'encoding', 'content', 'edits', 'pattern', 'replacement', 'dryRun', 'expectedRevision', 'to', 'overwrite', 'recursive', 'confirm'].every((key) => key in def.parameters), Object.keys(def.parameters).join(','))
         ok('有 output.schema 与 render', def.output?.schema !== undefined && typeof def.output?.render === 'function')
     }
 }
