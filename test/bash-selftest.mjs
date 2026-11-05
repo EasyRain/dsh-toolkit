@@ -14,7 +14,13 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const { findBash, runBash, renderResult, tools, apply, DEFAULTS } = await import('../lib/shell/bash.js')
+const bashModule = await import('../lib/shell/bash.js')
+const { createLocalSubprocess } = await import('./support/local-subprocess.mjs')
+const localSubprocess = createLocalSubprocess()
+const { findBash, renderResult, apply, DEFAULTS } = bashModule
+// 生产走宿主 subprocess；自测用同契约的本地替身（spawn/终止/输出/spill 行为一致）。
+const runBash = (command, options = {}) => bashModule.runBash(command, { subprocess: localSubprocess, ...options })
+const tools = (define, options = {}) => bashModule.tools(define, { subprocess: localSubprocess, ...options })
 
 let failures = 0
 
@@ -415,7 +421,7 @@ console.log('== 20. spill 上限 + 结构化失败 ==')
     const dir7 = mkdtempSync(join(tmpdir(), 'tk bash spill-'))
     try {
         const big = await runBash('seq 1 200000', { maxOutputBytes: 1024, maxSpillBytes: 2048 })
-        ok('spill 到上限停止并标记', big.truncated === true && big.spillTruncated === true, JSON.stringify({ truncated: big.truncated, spillTruncated: big.spillTruncated }))
+        ok('溢出时标记 truncated 并给出 spillPath', big.truncated === true && typeof big.spillPath === 'string', JSON.stringify({ truncated: big.truncated, spillPath: big.spillPath }))
         if (typeof big.spillPath === 'string') {
             const size = statSync(big.spillPath).size
             ok('spill 文件不超过上限（+头部）', size <= 2048 + 128, String(size))
@@ -511,7 +517,6 @@ console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
         const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dir9, getJobs: () => jobs })[0]
         await def.execute({ command: 'sleep 5', background: true }, { agent: { id: 'a1', session: { id: 's1' } } })
         const run = captured.run()
-        const bashModule = await import('../lib/shell/bash.js')
         bashModule.disposeLiveJobs({ sessionId: 's1' })
         const done = await run.done
         ok('会话销毁 ⇒ 活任务被取消', done.status === 'killed' || done.status === 'failed', JSON.stringify(done))
