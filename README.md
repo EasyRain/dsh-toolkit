@@ -1,6 +1,6 @@
 # dsh-toolkit
 
-> A **host-side plugin** for the [DeepSeek Harness](https://github.com/deepseek-ai) (DSH) desktop app: **13 tools in 5 families** — table diff, AST search/rewrite, session logs, checkpoint/rewind, download — plus on-demand help.
+> A **host-side plugin** for the [DeepSeek Harness](https://github.com/deepseek-ai) (DSH) desktop app: **15 tools in 7 families** — table diff, AST search/rewrite, session logs, checkpoint/rewind, download, a Windows bash executor, and file read/write/**diff** — plus on-demand help.
 >
 > 给 DSH 桌面端用的自有宿主插件：一个插件，七族 15 个工具。[中文说明 →](README.zh-CN.md)
 
@@ -22,12 +22,14 @@
 1. **Never a nested loop.** Table diffs are always a hash join, `O(N+M)`. (Origin story: an early Python script compared glossary tables with nested loops — 37 million comparisons — and only a SQLite rewrite saved the day.)
 2. **A silent wrong answer costs more than a crash.** Whenever a result could be misread, the tool says so out loud: an empty side prints a top-line `⚠⚠` and the summary reads *"not comparable — this is NOT 'no differences'"*; corrupt zstd frames, downgraded copy budgets, truncation caps, ambiguous checkpoint ids and cross-workspace operations are all surfaced, never guessed.
 
-## The 13 tools
+## The 15 tools
 
 - **Table diff (2)** — `table_diff` / `table_peek`: auto-detects Lua / JSON / JSONL / CSV / TSV / PO / properties / YAML / TOML / zip-jar / mappings / SQLite (`node:sqlite`, supports `path#table` and custom SQL); `a`/`b`/`mapA`/`mapB` accept globs (all matches merge into one key space); key/value projection supports dotted paths and `+` joins; record mode compares field by field after canonicalization.
 - **AST (4)** — `ast_search` / `ast_dump_tree` / `ast_test_rule` / `ast_edit`. Rewrites run **in-process** via `@ast-grep/napi` (no external binary), with preview → apply, staleness checks and atomic writes.
 - **Session logs (4)** — `session_list` (`kind:"sessions"` logs on disk / `"subagents"` catalog registrations) / `session_read` (give `pattern` to grep events, omit it for the last `tail` events) / `session_diff` / `session_export`: decode multi-frame zstd logs frame by frame; `session_diff` uses hash alignment, not LCS.
 - **Download (1)** — `download`, one tool with `action`: `start` (default; `probe:true` first), `probe` (measure only, writes nothing), `status` (progress/speed/chunk health, including "the worker died but the `.part` is still there" ⇒ resumable) and `cancel` (keeps the `.part` by default). Zero-dependency multi-connection engine: Range chunks + resume + sha256 + system-proxy detection (Windows registry → PAC → env vars → common local proxy ports; **no proxy software required**, and `proxy:"direct"` forces a direct connection).
+- **Bash (1)** — `bash` (Windows only): runs Git Bash through the host `ctx.subprocess` (termination escalation, output budgets and spill owned by the host). Honours `sandboxPolicy` / `sandbox.confine`, supports per-call `sandbox_permissions` escalation through host approval (nothing runs unless granted), promotes foreground commands to background jobs on timeout, and `run_in_background` (host name) has **no default execution timeout**. Output follows the host terminal-card contract (real exit code / signal name).
+- **File (1)** — `file` with ten actions: `read` (encoding detection, multi-file/ranges, OOXML text), `stat`, **`diff`** (file vs proposed content: one trimmed hunk, paged, old/new sha256, read-only), `write` (atomic, CAS), `edit`, `replace`, `copy`, `move`, `remove`, `mkdir`.
 - **Checkpoint / rewind (1)** — `checkpoint`, one tool with seven actions: `create` (snapshot; `estimate:true` only walks and reports), `list`, `diff`, `restore` (preview by default — `confirm:true` to write), `prune`, `journal` (automatic pre-images) and `journal_restore` (roll a single file back), plus the `/checkpoint` and `/rewind` commands and three host hooks (`fs/write-intent`, `fs/edit-intent`, `tools/pre-execute`) that keep a pre-image of any file about to be written.
 - **Help (1)** — `toolkit_help` with topics (the family notes) **and the vendored ast-grep rule guide** (MIT): `overview` / `table-diff` / `checkpoint` / `session` / `ast` / `ast-rules` / `gotchas` / `full`.
 

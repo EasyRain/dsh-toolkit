@@ -1,6 +1,6 @@
 # dsh-toolkit
 
-> 给 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）桌面端用的**自有宿主插件**：一个插件，七族 15 个工具 —— 表 diff、AST 结构检索/改写、会话日志、快照与回滚、下载（这三者由 `action` 驱动）、bash 执行器、文件读写（`file`，8 个动作），外加一个按需帮助。
+> 给 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）桌面端用的**自有宿主插件**：一个插件，七族 15 个工具 —— 表 diff、AST 结构检索/改写、会话日志、快照与回滚、下载（这三者由 `action` 驱动）、bash 执行器、文件读写（`file`，10 个动作，含 `diff` 改前预览），外加一个按需帮助。
 >
 > A host-side plugin for the DSH desktop app. [English →](README.md)
 
@@ -22,14 +22,14 @@
 1. **绝不嵌套遍历** —— 表 diff 一律哈希连接 `O(N+M)`（起因：早先用 Python 嵌套比语术表 = 3,700 万次比较，最后靠 SQLite 才救回来）；
 2. **静默错比崩溃更贵** —— 只要结果可能被误读，工具就把话说出来：0 结果会置顶 `⚠⚠` 并写"无法比较（**不是**没有差异）"；坏帧、复制预算降级、上限截断、歧义 id、跨工作区操作……一律**外显**，不猜。
 
-## 工具一览（13）
+## 工具一览（15）
 
 - **表 diff（2）** `table_diff` / `table_peek` —— 自动识别 Lua / JSON / JSONL / CSV / TSV / PO / properties / YAML / TOML / zip-jar / mappings / SQLite（`node:sqlite`，支持 `path#table` 与自定义 SQL）；`a`/`b`/`mapA`/`mapB` 支持 glob 合并；键值投影支持点路径与 `+` 组合；记录模式下按字段结构化比较。
 - **AST（4）** `ast_search` / `ast_dump_tree` / `ast_test_rule` / `ast_edit` —— 改写走**进程内** `@ast-grep/napi`（不需要外部二进制），preview → apply、过期校验、原子写。规则写作指南（原 `ast_grep_help`）已并入下面的 `toolkit_help`（主题 `workflow` / `rule-object` / `atomic` / `relational` / `composite` / `metavariables` / `ast-rules`）。
 - **会话日志（4）** `session_list`（`kind:"sessions"` 列日志 / `"subagents"` 列子代理登记）/ `session_read`（给 `pattern` = 正则过滤，不给 = 看最后 N 条）/ `session_diff` / `session_export` —— 多帧 zstd 逐帧解码；`session_diff` 哈希对齐（不是 LCS）。
 - **下载（1）** `download` —— **零依赖多线程下载器**，一个工具用 `action` 选动作：`start`（默认；先 `probe:true` 探 Range 与每连接吞吐）、`probe`（只探测不落盘）、`status`（进度/速度/分片，含"worker 已死但 `.part` 还在"⇒ 可续）、`cancel`（默认保留 `.part`）。`.part`+manifest 断点续传、sha256 校验、**系统代理自动探测**（注册表 → PAC → 环境变量 → 常见本地代理端口；**不需要装代理软件**，也可以 `proxy:"direct"` 强制直连）、自定义 headers/Cookie/Referer；默认落盘 `<工作区>/downloads/`，>32 MB 自动转后台
-- **File（1）** `file` —— 一个工具八个动作：`read`（多文件 + 多区间；**编码探测** BOM → 严格 UTF-8 → 严格 GB18030；二进制给 hex 预览）、`stat`、`write`（**原子写**，可带 UTF-8 BOM）、`edit`（`oldText→newText` 必须**唯一命中且不重叠**，按原编码写回、保留 BOM/CRLF）、`copy` / `move`（默认不覆盖，跨卷退化为复制+删源）、`remove`（默认只预览，`confirm:true` 才删）、`mkdir`。`write`/`edit` 支持 **`expectedRevision` CAS**（sha256 或 `"absent"`），回执带新 revision。
-- **Bash（1）** `bash` —— 用**系统 Git Bash** 跑 POSIX 命令行：`command` / `cwd` / `timeoutMs`，返回退出码、stdout、stderr（分开）、`truncated`、`timedOut`。非交互（stdin 关闭）、超时杀**整棵进程树**、输出默认上限 2 MB、找不到 bash 就明确报错（**不下载任何东西**）。内核 0.2.2 移除 `ops_bash` 之后的替代，不依赖 dsh-ops。
+- **File（1）** `file` —— 一个工具十个动作：`read`（多文件 + 多区间；**编码探测** BOM → 严格 UTF-8 → 严格 GB18030；二进制给 hex 预览）、`stat`、**`diff`**（文件 vs 拟写入内容：单 hunk、分页、双哈希，只读）、`write`（**原子写**，可带 UTF-8 BOM）、`edit`（`oldText→newText` 必须**唯一命中且不重叠**，按原编码写回、保留 BOM/CRLF）、`copy` / `move`（默认不覆盖，跨卷退化为复制+删源）、`remove`（默认只预览，`confirm:true` 才删）、`mkdir`。`write`/`edit` 支持 **`expectedRevision` CAS**（sha256 或 `"absent"`），回执带新 revision。
+- **Bash（1）** `bash`（Windows 专用）—— 用 **Git Bash** 跑 POSIX 命令行；执行交给宿主 `ctx.subprocess`（终止升级/输出预算/spill/管道由宿主管理）。尊重 `sandboxPolicy` + `sandbox.confine`，支持 `sandbox_permissions` 逐次升级（宿主审批，批准前不执行）；超时转后台（`promoted`），`run_in_background` 与宿主同名且**无默认执行超时**；结果按宿主 terminal 卡片契约输出（真实退出码/信号名），点停止能立即杀树。
 - **checkpoint（1）** `checkpoint` —— 一个工具七个动作：`create`（快照，`estimate:true` 只估算）、`list`、`diff`、`restore`（**默认只预览**，要 `confirm:true` 才写盘）、`prune`、`journal`（写文件前的自动留底）、`journal_restore`（按留底回滚单个文件）；附 `/checkpoint`、`/rewind` 命令，以及 `fs/write-intent`、`fs/edit-intent`、`tools/pre-execute` 三个钩子。
 - **帮助（1）** `toolkit_help` —— 主题：`overview` / `table-diff` / `checkpoint` / `session` / `ast` / `ast-rules` / `gotchas` / `full`，**外加并入的 ast-grep 规则主题** `workflow` / `rule-object` / `atomic` / `relational` / `composite` / `metavariables`（取回时附上游 MIT 出处）。
 
