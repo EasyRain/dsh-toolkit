@@ -204,6 +204,10 @@ console.log('== 13. 隐藏宿主 pwsh（Windows，省常驻 schema）==')
     const second = makeAgent('a2')
     handlers['agent/created']?.({ agent: second })
     ok('新会话创建时也隐藏', calls.length === 2 && calls[1].agent === 'a2', JSON.stringify(calls.map((call) => call.agent)))
+    // ops 的写法是直接 `agent.ctx.tools`（没有 get('tools')），两条路都要能走
+    const direct = { name: 'a3', ctx: { tools: toolsFor('a3') } }
+    handlers['agent/created']?.({ agent: direct })
+    ok('agent.ctx.tools 直接可见时也能隐藏', calls.length === 3 && calls[2].agent === 'a3', JSON.stringify(calls.map((call) => call.agent)))
     handlers['agent/disposed']?.({ agent: second })
     ok('会话销毁时还原', disposed.includes('a2'), disposed.join(','))
     cleanup?.()
