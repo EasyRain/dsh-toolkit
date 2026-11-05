@@ -321,6 +321,11 @@ console.log('== 16. 沙箱闸门（非完全权限必须真受限，否则拒绝
         ok('拿不到 confinement ⇒ 拒绝执行', /ok=false/.test(closedOut) && /SANDBOX_UNAVAILABLE/.test(closedOut), closedOut.slice(0, 200))
         ok('拒绝时命令确实没跑（没有副作用）', !existsSync(join(dir5, 'touched.txt')))
         ok('回执标出 unavailable', /\[sandbox: unavailable/.test(closedOut), closedOut.slice(0, 200))
+
+        // 连 sandboxPolicy 服务都拿不到（宿主上下文里）⇒ 同样拒绝，不能退化成"直接放行"
+        const noPolicy = define({ get: () => undefined })
+        const noPolicyOut = await noPolicy.execute({ command: 'echo should-not-run' }, { agent: { session: {} } })
+        ok('拿不到 sandboxPolicy ⇒ 拒绝执行', /ok=false/.test(noPolicyOut) && /SANDBOX_UNAVAILABLE/.test(noPolicyOut) && !/should-not-run/.test(noPolicyOut), noPolicyOut.slice(0, 200))
     }
     finally {
         rmSync(dir5, { recursive: true, force: true })
