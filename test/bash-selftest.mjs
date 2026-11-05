@@ -208,6 +208,10 @@ console.log('== 13. 隐藏宿主 pwsh（Windows，省常驻 schema）==')
     const direct = { name: 'a3', ctx: { tools: toolsFor('a3') } }
     handlers['agent/created']?.({ agent: direct })
     ok('agent.ctx.tools 直接可见时也能隐藏', calls.length === 3 && calls[2].agent === 'a3', JSON.stringify(calls.map((call) => call.agent)))
+    // 受限会话（workspace-write）保留 pwsh：Windows 下 bash 起不来，两个都藏就一个 shell 都没有
+    const restricted = { name: 'a4', session: {}, ctx: { get: (service) => (service === 'tools' ? toolsFor('a4') : (service === 'sandboxPolicy' ? { resolve: () => ({ mode: 'workspace-write' }) } : undefined)) } }
+    handlers['agent/created']?.({ agent: restricted })
+    ok('受限会话保留 pwsh（不隐藏）', calls.every((call) => call.agent !== 'a4'), JSON.stringify(calls.map((call) => call.agent)))
     handlers['agent/disposed']?.({ agent: second })
     ok('会话销毁时还原', disposed.includes('a2'), disposed.join(','))
     cleanup?.()
@@ -296,7 +300,8 @@ console.log('== 16. 沙箱闸门（非完全权限必须真受限，否则拒绝
     const dir5 = mkdtempSync(join(tmpdir(), 'tk bash sandbox-'))
     try {
         const makeCtx = (mode, sandbox) => ({ get: (name) => (name === 'sandboxPolicy' ? { resolve: () => ({ mode }) } : (name === 'sandbox' ? sandbox : undefined)) })
-        const define = (ctx) => tools((tool) => tool, { resolveWorkspaceCwd: () => dir5, getCtx: () => ctx })[0]
+        // 默认按 POSIX 语义测 confine 路径；Windows 的“系统 Git Bash 起不来”单独测。
+        const define = (ctx, sandboxPlatform = 'linux') => tools((tool) => tool, { resolveWorkspaceCwd: () => dir5, getCtx: () => ctx, sandboxPlatform })[0]
 
         const dangerCalls = []
         const danger = define(makeCtx('danger-full-access', { confine: async (argv) => { dangerCalls.push(argv); return { argv, enforcement: 'full' } } }))
@@ -326,6 +331,12 @@ console.log('== 16. 沙箱闸门（非完全权限必须真受限，否则拒绝
         const noPolicy = define({ get: () => undefined })
         const noPolicyOut = await noPolicy.execute({ command: 'echo should-not-run' }, { agent: { session: {} } })
         ok('拿不到 sandboxPolicy ⇒ 拒绝执行', /ok=false/.test(noPolicyOut) && /SANDBOX_UNAVAILABLE/.test(noPolicyOut) && !/should-not-run/.test(noPolicyOut), noPolicyOut.slice(0, 200))
+
+        // Windows 受限模式：系统 Git Bash 在沙箱里起不来 ⇒ 提前拒绝并说明（而不是崩在半路或放行）
+        const winRestricted = define(makeCtx('workspace-write', { confine: async (argv) => ({ argv, enforcement: 'full' }) }), 'win32')
+        const winOut = await winRestricted.execute({ command: 'touch win32-touched.txt' }, { agent: { session: {} } })
+        ok('Windows 受限模式拒绝系统 Git Bash 并给出出路', /ok=false/.test(winOut) && /EXECUTOR_UNAVAILABLE/.test(winOut) && /danger-full-access/.test(winOut), winOut.slice(0, 240))
+        ok('Windows 拒绝时命令确实没跑', !existsSync(join(dir5, 'win32-touched.txt')))
     }
     finally {
         rmSync(dir5, { recursive: true, force: true })

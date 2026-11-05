@@ -31,6 +31,7 @@
 - **后台任务**：`background:true` ⇒ 交给宿主 `jobs` 服务（`kind:'bash'`、`label`、`owner`、stdout/stderr 读取器），立刻回 `jobId`；之后用宿主的 `job_output` 读输出、`job_kill` 停。宿主没有 `jobs` 服务时**明确报错**（`ok=false`），不静默降级成前台。
 - **沙箱**：会话策略不是 `danger-full-access` 时，整条 argv 会先过 `sandbox.confine(argv, policy, signal)`，用**它的** argv 起进程；退出码非 0 且 stderr 命中 `denialSignatures` 就在回执里标 `[sandbox: file access denied under <mode> mode]`。
   **拿不到 `sandboxPolicy`/`sandbox.confine` 或 confinement 结果无效 ⇒ 直接拒绝执行（`SANDBOX_UNAVAILABLE`，命令根本没跑）**，绝不"先放过去再说"。`danger-full-access` 下不包装（与宿主同权限）。
+  **Windows + 受限模式**：系统 Git Bash 起不来（MSYS 建信号管道被沙箱拒绝，`0xC0000142`）⇒ 自动**复用 dsh-ops 的私有 MSYS**（`confinedBash()` + `@dsh-ops/bash-win32-x64`，首次调用复制约 174 MB 到 `~/.dsh/dsh-ops/bash-ipc/`），再走 `sandbox.confine`。**依赖已安装的 `dsh-ops` 包**（MIT；只在运行时借用，不把载荷复制进本仓库）；缺失或版本不符 ⇒ 明确 `EXECUTOR_UNAVAILABLE`，绝不放行。
 - **与 `ops_bash` 的差异**（明确写出来，别假设等价）：**没有 promoted 语义**（不会把正在跑的前台任务提升为后台，只有 foreground/background 两种）、**没有 persistent/PTY 会话**、失败回执是 `error` 文本而不是结构化 `failure.code/effectState/retry`。沙箱接法照 ops（`sandboxPolicy.resolve` + `sandbox.confine`），但不换用 ops 的 confined Bash IPC 运行时。工具本身的执行语义（`-c`、杀整棵树、UTF-8 locale、argv 直传）与 ops 一致。
 - **找不到 bash** ⇒ 明确报错并提示装 Git for Windows；**绝不**自动下载。
 - **没装 bash 时**：设置 → 工具集里「Bash 执行器」那行会给两个按钮 —— **从国内镜像安装**（npmmirror，直连，实测 60 MB / 2.7 s）、**从 GitHub 安装**（需要你自己能连 GitHub）。装的是**用户级 PortableGit**（`%LOCALAPPDATA%\dsh-toolkit\git`）：不需要管理员、不改系统 Git、装完删掉 60 MB 安装包；**没装好之前这个开关是禁用的**（工具仍注册，调用会返回明确错误，而不是静默失败）。
