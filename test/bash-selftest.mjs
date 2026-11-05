@@ -591,6 +591,12 @@ console.log('== 25. 宿主 subprocess 路径（spawn/终止/输出交给宿主�
     await livePromoted.live.done
     await new Promise((resolve) => setTimeout(resolve, 40))
     ok('晋升后持续回传输出（含结束前最后一块）', chunks.join('').includes('late') && chunks.join('').includes('tail'), JSON.stringify(chunks))
+
+    const hostSignal = { spawn() { return makeHandle({ exitCode: 3840 }) } }
+    const sig = await runBash('x', { subprocess: hostSignal })
+    ok('Windows 的 signal<<8 退出码还原成信号名', sig.signal === 'SIGTERM' && sig.exitCode === null && sig.rawExitCode === 3840, JSON.stringify({ signal: sig.signal, exitCode: sig.exitCode }))
+    const realSig = await runBash('kill -TERM $$', { subprocess: localSubprocess })
+    ok('被信号杀掉的回执带 signal=SIGTERM', realSig.signal === 'SIGTERM' && /\[killed by signal: SIGTERM\]/.test(renderResult(realSig)), JSON.stringify({ signal: realSig.signal }))
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
