@@ -172,7 +172,13 @@ else {
         const p = mk('a4-bom.js', 'const a = 1\nconst b = 2\n', true, true)
         const preview = await edit.execute({ ops: [{ pat: 'const $N = $V', out: 'let $N = $V' }], paths: [p], action: 'preview' }, exec)
         const staged = String(preview).match(/stagedId[=: ]+([A-Za-z0-9_-]+)/)?.[1] ?? undefined
-        await edit.execute({ ops: [{ pat: 'const $N = $V', out: 'let $N = $V' }], paths: [p], action: 'apply', stagedId: staged }, exec)
+        let applyError = ''
+        try {
+            if (staged === undefined) throw new Error('preview 未返回 stagedId')
+            await edit.execute({ ops: [{ pat: 'const $N = $V', out: 'let $N = $V' }], paths: [p], action: 'apply', stagedId: staged }, exec)
+        }
+        catch (error) { applyError = error instanceof Error ? error.message : String(error) }
+        ok('W4 改写可落盘（BOM/CRLF 用例）', applyError === '', applyError.slice(0, 120))
         const buf = readFileSync(p)
         const hasBom = buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF
         const text = buf.toString('utf8')
