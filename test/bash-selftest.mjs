@@ -85,8 +85,10 @@ if (process.platform === 'win32') {
 else {
     const dir = mkdtempSync(join(tmpdir(), 'tk bash space-'))
     try {
-        const r = await runBash('ls -d "$1"', { cwd: dir }) // 变量值里带空格，验证 argv/cwd 没被再切一次
-        ok('POSIX 路径 + 空格', r.exitCode === 0, JSON.stringify(r))
+        // 目录名里带空格：验证 cwd 原样传给 bash（不经过二次切词）。
+        const r = await runBash('basename "$PWD"', { cwd: dir })
+        const base = dir.split(/[\\/]/).filter(Boolean).pop()
+        ok('POSIX 路径 + 空格', r.exitCode === 0 && r.stdout.trim() === base, JSON.stringify({ out: r.stdout, base }))
     }
     finally {
         rmSync(dir, { recursive: true, force: true })

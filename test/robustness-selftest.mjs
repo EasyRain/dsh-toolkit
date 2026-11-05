@@ -96,7 +96,10 @@ try {
     // **在子进程里归类**，别让父进程去猜消息文本（踩过：错误消息很长，父进程截断后就把"真正原因"切掉了 ⇒ 偶发假红）
     const m = String(error.message)
     const kind = /另一个进程正在写这个文件/.test(m) ? 'LOCK' : (/文件在预览之后被改过/.test(m) ? 'STALE' : 'OTHER')
-    console.log('ERR ' + kind + ' ' + m.split('\\n')[0].slice(0, 200))
+    // CI 的 Windows runner 上偶发被杀软/文件占用挡成 EPERM/EBUSY（不是锁冲突，但也**什么都没写**）。
+    // 把 effectState 单独打出来，父进程才能区分"安全的 OTHER"与"真的写了一半"。
+    const effect = /effectState: (none|applied|unknown)/.exec(m)?.[1] ?? 'unknown'
+    console.log('ERR ' + kind + ' effect=' + effect + ' ' + m.split('\\n')[0].slice(0, 200))
     process.exit(3)
 }
 `)
@@ -135,8 +138,8 @@ try {
     ok('没有任何子进程异常退出（崩掉）', crashed === 0, `codes=${procs.map((p) => p.code).join(',')}`)
     // ⚠️ 用 `m` 标志按**行**匹配：子进程先打一行 `PREVIEW …`，`^ERR` 不能锚在整段开头。
     const errLine = (p) => (p.out.match(/^ERR (LOCK|STALE|OTHER)\b.*$/m) ?? ['(没有 ERR 行)'])[0]
-    ok('争用的那部分给了可读原因（子进程自己归类为 LOCK/STALE）',
-        procs.filter((p) => p.code === 3).every((p) => /^ERR (LOCK|STALE)\b/m.test(p.out)),
+    ok('争用的那部分给了可读原因（LOCK/STALE；环境性 IO 失败必须是 effect=none）',
+        procs.filter((p) => p.code === 3).every((p) => /^ERR (LOCK|STALE)\b/m.test(p.out) || (/^ERR OTHER\b/m.test(p.out) && /\beffect=none\b/.test(p.out))),
         procs.filter((p) => p.code === 3).map((p) => errLine(p).slice(0, 56)).join(' | '))
     const finalText = readFileSync(target, 'utf8')
     ok('文件内容完整且正确（没有交错/截断）', finalText === expected, `len=${finalText.length} exp=${expected.length}`)
