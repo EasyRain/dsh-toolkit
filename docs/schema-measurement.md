@@ -12,9 +12,9 @@
 - **常驻总量 = 工具 schema + 注入的 prompt 路由段**（由 `lib/routing.js` 生成）：
   | 组成 | 字节 | 说明 |
   |---|---:|---|
-  | 工具 schema（15 件） | **34,705 B** | 家族小计见 `docs/schema-baseline.json` 的 `families` |
+  | 工具 schema（15 件） | **34,847 B** | 家族小计见 `docs/schema-baseline.json` 的 `families` |
   | prompt 路由段（`routingSection`） | **649 B**（6 行） | 只广告**实际挂载**的工具；一个都没挂载 ⇒ 整段消失 |
-  | **常驻合计** | **35,354 B ≈8,839 tok** | 报告里的 `resident` 字段 |
+  | **常驻合计** | **35,496 B ≈8,874 tok** | 报告里的 `resident` 字段 |
   **基线重冻说明**（每一次重冻都按"确实决定接受这次变化"来做，原因写在这里；此后继续按 总 +5% / 单件 +10% 的闸门压）：
   - **新增 `bash`（内核 0.2.2 移除 `ops_bash` 后的自建替代）**：工具 schema 28,732 → **29,783 B（+3.66%）**，
     新增 `shell` 族 **1,043 B**（261 tok）；其余单件零变化（`help` 的 1,098 → 1,106 是上一次测量后的口径微差，随本次一并对齐）。
@@ -27,6 +27,7 @@
     新增的是"读完回 revision / complete / nextOffset / truncatedInLine"的说明；参数面没变，所以增幅很小。
   - **`file` 新增 `replace` 动作（同日）**：`file` 3,341 → **3,788 B（+13.4%）**，全量 33,146 → **33,593 B（+1.3%）**；
     参数面 +3（`pattern` / `replacement` / `dryRun`），换掉的是"批量字面替换必须自己写脚本"。
+  - **`shell` 后台参数对齐（同日）**：新增 `run_in_background`（与宿主同名）+ `background` 别名，`shell` 1,974 -> **2,116 B**，全量 34,705 -> **34,847 B（+0.4%）**。
   - **`shell` terminal 卡片契约（同日）**：`description` 必填 + 末尾 `[exit code]` 标记，`shell` 1,928 -> **1,974 B**，全量 34,659 -> **34,705 B（+0.13%）**。
   - **`shell` 审批 + 生命周期（同日）**：新增 `sandbox_permissions`/`justification` 两个参数，`shell` 1,604 -> **1,928 B（+324）**，全量 34,335 -> **34,659 B（+0.9%）**；
     换来的是受限模式下的逐次升级（宿主审批）与会话销毁时的任务收尾。
@@ -78,13 +79,13 @@
   ⇒ 对中文内容这个近似是**高估**。要引用"多少 token"，请说明用的是哪个口径：
   | 口径 | 15 工具 | 说明 |
   |---|---:|---|
-  | 紧凑字节 | **34,705 B** | 本文件/`docs/schema-baseline.json` 的口径 |
-  | `bytes / 4` | ≈8,677 tok | 对中文高估 |
+  | 紧凑字节 | **34,847 B** | 本文件/`docs/schema-baseline.json` 的口径 |
+  | `bytes / 4` | ≈8,712 tok | 对中文高估 |
   | 真 tokenizer | **6,921 tok**（上次会话族扩展时的实测；DeepSeek 官方 `tokenizer.json`，换分词器会不同） | 口径可替换：作者本机用维护者工作区的 `schema-cost.mjs`。**注意**：那个脚本原先硬列 6 个模块、**漏了 `download` 一族**（口径少一个工具、4,531 tok 是那时的数），现在改成从**插件入口的注册面**取。**趋势**：6,583 → 瘦身后 6,429 → 加 `text_mode` 6,475 → 加 `diff` 动作 6,515 → 改名并把 diff 挪到 `ast_search` **6,552** → 会话族扩展（scope/where/fields）**6,921** → 加 bash（本次未重测真分词器，按字节增量估 ≈+261 tok） |
-- **按需成本另计**：`docs/TOOLKIT.md` **65,939 B**（基线口径；最近一次实测同值 —— 改一次文档就会变，`docs/schema-current.json` 的 `onDemand.bytes` 是最近一次实测）—— 只有某会话真的请教（`toolkit_help`）才付这份钱。
+- **按需成本另计**：`docs/TOOLKIT.md` **66,187 B**（基线口径；最近一次实测同值 —— 改一次文档就会变，`docs/schema-current.json` 的 `onDemand.bytes` 是最近一次实测）—— 只有某会话真的请教（`toolkit_help`）才付这份钱。
   **要写小抄、长例子、踩坑清单，请放这里，不要塞进 schema。**
 - **组件/家族小计**：`ast` 8,531 B、`table` 6,252 B、`session` 5,368 B、`download` 3,762 B、`checkpoint` 3,721 B、
-  `file` 3,969 B、`shell` 1,974 B、`help` 1,128 B（同 `docs/schema-baseline.json`）。最重单件现在是 `table_diff` 4,584 B（其后 `ast_edit` 4,485 B）。
+  `file` 3,969 B、`shell` 2,116 B、`help` 1,128 B（同 `docs/schema-baseline.json`）。最重单件现在是 `table_diff` 4,584 B（其后 `ast_edit` 4,485 B）。
 
 ## 怎么用
 
