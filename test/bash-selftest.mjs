@@ -10,7 +10,7 @@
  * 跑法：node test/bash-selftest.mjs
  */
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -157,8 +157,8 @@ console.log('== 11. 工具定义形状（宿主注册契约）==')
     ok('只注册 1 个工具', list.length === 1, String(list.length))
     const def = seen[0] ?? {}
     ok('名字是 bash', def.name === 'bash')
-    ok('参数是字段映射方言（command 必填）', def.parameters?.command?.required === true && typeof def.parameters?.command?.type === 'string')
-    ok('参数面 = command / cwd / timeoutMs', Object.keys(def.parameters ?? {}).sort().join(',') === 'command,cwd,timeoutMs', Object.keys(def.parameters ?? {}).join(','))
+    ok('参数是字段映射方言（command 与 script_path 二选一，均非必填）', typeof def.parameters?.command?.type === 'string' && def.parameters?.command?.required !== true && typeof def.parameters?.script_path?.type === 'string')
+    ok('参数面 = ops 那套（command/script_path/description/cwd/workdir/timeoutMs/graceMs/includeDiagnostics）', Object.keys(def.parameters ?? {}).sort().join(',') === 'command,cwd,description,graceMs,includeDiagnostics,script_path,timeoutMs,workdir', Object.keys(def.parameters ?? {}).join(','))
     ok('有 output.schema 与 render', def.output?.schema !== undefined && typeof def.output?.render === 'function')
     ok('描述里写清了非交互与超时', /Non-interactive/.test(def.description) && /timeout/i.test(def.description))
 }
@@ -213,6 +213,46 @@ console.log('== 13. 隐藏宿主 pwsh（Windows，省常驻 schema）==')
     cleanup?.()
     ok('插件卸载时把剩下的都还原', disposed.includes('a1'), disposed.join(','))
     ok('日志里有动作记录', logs.some((line) => /hidden/.test(line)), logs.join(' | '))
+}
+
+console.log('== 14. 与 ops 对齐的新参数（script_path / workdir / graceMs / spill / diagnostics）==')
+{
+    ok('graceMs 默认 250', DEFAULTS.graceMs === 250)
+    const dir2 = mkdtempSync(join(tmpdir(), 'tk bash ops-'))
+    try {
+        const script = join(dir2, 'my script.sh')
+        writeFileSync(script, 'echo from-script "$@"\n', 'utf8')
+        const viaScript = await runBash('', { scriptPath: script })
+        ok('script_path 能跑带空格的脚本', viaScript.ok === true && /from-script/.test(viaScript.stdout), JSON.stringify(viaScript).slice(0, 160))
+        const conflict = await runBash('echo x', { scriptPath: script })
+        ok('script_path 与 command 同时给 ⇒ 拒绝', conflict.ok === false && /二选一/.test(conflict.error ?? ''), conflict.error)
+        const missing = await runBash('', { scriptPath: join(dir2, 'nope.sh') })
+        ok('脚本不存在 ⇒ 明确报错', missing.ok === false && /不存在/.test(missing.error ?? ''))
+
+        const base = dir2.split(/[\\/]/).filter(Boolean).pop()
+        const viaWorkdir = await runBash('basename "$PWD"', { workdir: dir2 })
+        ok('workdir 是 cwd 的别名', viaWorkdir.ok === true && viaWorkdir.stdout.trim() === base, JSON.stringify({ out: viaWorkdir.stdout, base }))
+        const cwdWins = await runBash('basename "$PWD"', { cwd: dir2, workdir: tmpdir() })
+        ok('cwd 与 workdir 都给时 cwd 优先', cwdWins.stdout.trim() === base)
+
+        const big = await runBash('seq 1 20000', { maxOutputBytes: 1024 })
+        ok('超上限 ⇒ truncated 且给出 spillPath', big.truncated === true && typeof big.spillPath === 'string', JSON.stringify(big).slice(0, 160))
+        if (typeof big.spillPath === 'string') {
+            const spilled = readFileSync(big.spillPath, 'utf8')
+            ok('spill 文件里有完整输出的尾巴（20000）', spilled.includes('20000') && spilled.length > 1024, String(spilled.length))
+            ok('渲染里明示落盘路径', renderResult(big).includes(big.spillPath))
+            rmSync(big.spillPath, { force: true })
+        }
+
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dir2 })[0]
+        const plain = await def.execute({ command: 'echo hi' })
+        ok('默认不打印 diagnostics', !/diagnostics:/.test(plain) && /hi/.test(plain))
+        const verbose = await def.execute({ command: 'echo hi', includeDiagnostics: true })
+        ok('includeDiagnostics 时打印 cwd/timeout/grace', /diagnostics: cwd=/.test(verbose) && /graceMs=250/.test(verbose), verbose.slice(-120))
+    }
+    finally {
+        rmSync(dir2, { recursive: true, force: true })
+    }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)

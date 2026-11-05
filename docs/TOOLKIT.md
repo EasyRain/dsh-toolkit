@@ -24,9 +24,11 @@
 `bash` —— 用**系统 Git Bash** 跑一行 POSIX 命令，拿回退出码、stdout、stderr（分开）。这是内核 0.2.2 移除 `ops_bash` 之后的替代：**不依赖 dsh-ops**、**不下载任何东西**（ops 那 392 MB 的 PortableGit 就是这么来的）。
 
 - **什么时候用它**：文本管道（`grep`/`sed`/`awk`/`sort`/`uniq`/`tr`）、通配、以及**引号会被 PowerShell 弄坏**的命令行。
-  注册表/服务/ACL/计划任务/WMI ⇒ 用 `pwsh`，别在 bash 里绕。
+  注册表/服务/ACL/计划任务/WMI ⇒ 走 `powershell.exe -NoProfile -Command "..."`（Windows 上宿主 `pwsh` 工具已被本族隐藏），别在 bash 里绕。
 - **非交互**：stdin 关闭，`read`/`sudo`/`ssh` 这类提示会挂到超时（默认 60 s，最大 600 s）。超时**杀整棵进程树**：先杀 MSYS 进程组（`kill -9 -<pgid>`），再用 `taskkill /T /F` 兜底 —— 只 `child.kill()` 会留孙进程；而 MSYS `fork` 出来的子进程连 `taskkill /T` 都抓不到（它的 Windows PPID 指向已退出的辅助进程），所以必须两路一起。
-- **输出**：默认上限 2 MB，超出置 `truncated:true`；stdout/stderr 原样回显，不做转义，`ok` 只在退出码 0 且未超时时为真。
+- **输出**：默认上限 2 MB，超出置 `truncated:true`，并把**完整输出落盘**（回执给 `spillPath`，用 `file read` 分段看）；stdout/stderr 原样回显，不做转义，`ok` 只在退出码 0 且未超时时为真。
+- **参数面（与 ops_bash 对齐）**：`command` / `script_path`（跑现成 `.sh`，与 `command` 二选一）/ `description` / `cwd` / `workdir`（`cwd` 的别名，同时给时 `cwd` 优先）/ `timeoutMs` / `graceMs`（先温和终止，等这么久再强杀整棵树，默认 250 ms）/ `includeDiagnostics`。
+- **与 `ops_bash` 的差异**（明确写出来，别假设等价）：**没有后台/晋升任务**（无 `jobId`、不接宿主 `job_output`/`job_kill`）、**没有 persistent/PTY 会话**、**不经过宿主 `sandbox`/`subprocess` 服务**（因此不产出 sandbox denial 报告）、失败回执是 `error` 文本而不是结构化 `failure.code/effectState/retry`。工具本身的执行语义（`-c`、杀整棵树、UTF-8 locale、argv 直传）与 ops 一致。
 - **找不到 bash** ⇒ 明确报错并提示装 Git for Windows；**绝不**自动下载。
 - **没装 bash 时**：设置 → 工具集里「Bash 执行器」那行会给两个按钮 —— **从国内镜像安装**（npmmirror，直连，实测 60 MB / 2.7 s）、**从 GitHub 安装**（需要你自己能连 GitHub）。装的是**用户级 PortableGit**（`%LOCALAPPDATA%\dsh-toolkit\git`）：不需要管理员、不改系统 Git、装完删掉 60 MB 安装包；**没装好之前这个开关是禁用的**（工具仍注册，调用会返回明确错误，而不是静默失败）。
 - **隐藏宿主 pwsh**（照 ops 的 "shell replacement"）：Windows 上开启本族、且 `findBash()` 找到 bash 时，按会话 `tools.restrict({ deny: ['pwsh','pwsh_persistent'] })` 把宿主自带的 PowerShell 工具藏起来 —— 只隐藏不卸载，会话销毁/插件卸载自动还原；**bash 不可用时不隐藏**（否则会话没有任何 shell）。POSIX 本来就只有 bash，不动。
