@@ -14,7 +14,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const { findBash, runBash, renderResult, tools, DEFAULTS } = await import('../lib/shell/bash.js')
+const { findBash, runBash, renderResult, tools, apply, DEFAULTS } = await import('../lib/shell/bash.js')
 
 let failures = 0
 const ok = (label, cond, extra = '') => {
@@ -341,6 +341,17 @@ console.log('== 16. 沙箱闸门（非完全权限必须真受限，否则拒绝
     finally {
         rmSync(dir5, { recursive: true, force: true })
     }
+}
+
+console.log('== 17. 平台注册面（POSIX 让位给宿主 bash）==')
+{
+    const registered = []
+    const fake = { tools: { register: (tool) => registered.push(tool) }, get: () => undefined }
+    const posixCount = apply(fake, (tool) => tool, { platform: 'linux' })
+    ok('POSIX 不注册（宿主已有 bash）', posixCount === 0 && registered.length === 0, String(posixCount))
+    const winCount = apply(fake, (tool) => tool, { platform: 'win32' })
+    ok('Windows 注册 1 个 bash', winCount === 1 && registered.length === 1 && registered[0].name === 'bash', String(winCount))
+    ok('POSIX/Windows 都只注册同名工具（宿主 UI 显示「运行命令」）', registered[0]?.name === 'bash')
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
