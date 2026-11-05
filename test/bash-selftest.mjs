@@ -543,5 +543,30 @@ console.log('== 24. 宿主 terminal 卡片契约 ==')
     ok('取消回执也带进程结局标记', /\[(exit code: -?\d+|killed by signal: [^\]]+)\]$/.test(cancelled.trimEnd()), cancelled.slice(-60))
 }
 
+console.log('== 25. 宿主 subprocess 路径（spawn/终止/输出交给宿主）==')
+{
+    const makeHandle = ({ stdout = '', stderr = '', exitCode = 0, delayMs = 0 }) => {
+        const makeReader = (text) => ({ readFrom(from) { return { text: text.slice(from), nextOffset: text.length, lossy: false } } })
+        return { collected: { stdout: makeReader(stdout), stderr: makeReader(stderr) }, done: new Promise((resolve) => setTimeout(() => resolve({ exitCode, signal: null }), delayMs)), terminate() {} }
+    }
+    let seenSpec = null
+    const host = { spawn(spec) { seenSpec = spec; return makeHandle({ stdout: 'host-out\n' }) } }
+    const r = await runBash('echo hi', { subprocess: host, cwd: tmpdir() })
+    ok('spawn 参数交给宿主（argv/stdio）', Array.isArray(seenSpec?.argv) && seenSpec.argv[1] === '-c' && seenSpec.stdio?.stdin === 'ignore', JSON.stringify({ argv: seenSpec?.argv?.slice(0, 2) }))
+    ok('宿主输出可回读', r.ok === true && r.stdout === 'host-out\n' && r.exitCode === 0, JSON.stringify({ ok: r.ok, out: r.stdout }))
+    const hostFail = { spawn() { return makeHandle({ stderr: 'bad\n', exitCode: 3 }) } }
+    const rf = await runBash('false', { subprocess: hostFail })
+    ok('非零退出可读', rf.ok === false && rf.exitCode === 3 && rf.stderr === 'bad\n', JSON.stringify({ ok: rf.ok, exit: rf.exitCode }))
+    const hostSlow = { spawn() { return makeHandle({ stdout: 'partial\n', delayMs: 300 }) } }
+    const promoted = await runBash('sleep', { subprocess: hostSlow, timeoutMs: 80, promoteOnTimeout: true })
+    ok('超时晋升返回 live 句柄', promoted.promoted === true && typeof promoted.live?.done?.then === 'function' && String(promoted.partial?.stdout).includes('partial'), JSON.stringify(Object.keys(promoted)))
+    promoted.live.kill()
+    const controller = new AbortController()
+    const hostAbort = { spawn() { return makeHandle({ delayMs: 300 }) } }
+    setTimeout(() => controller.abort(), 80)
+    const ra = await runBash('sleep', { subprocess: hostAbort, signal: controller.signal })
+    ok('取消回执带 cancelled', ra.ok === false && /cancelled/i.test(ra.error ?? ''), JSON.stringify({ error: ra.error }))
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
 process.exitCode = failures === 0 ? 0 : 1

@@ -29,6 +29,7 @@
 - **非交互**：stdin 关闭，`read`/`sudo`/`ssh` 这类提示会挂到超时（默认 60 s，最大 600 s）。超时**杀整棵进程树**：先杀 MSYS 进程组（`kill -9 -<pgid>`），再用 `taskkill /T /F` 兜底 —— 只 `child.kill()` 会留孙进程；而 MSYS `fork` 出来的子进程连 `taskkill /T` 都抓不到（它的 Windows PPID 指向已退出的辅助进程），所以必须两路一起。
 - **环境净化（照 ops）**：给子进程固定 `NO_COLOR=1`、`TERM=dumb`、`PAGER=cat`、`GIT_PAGER=cat`、`LC_MESSAGES=C`、`LC_ALL=C.UTF-8` —— 没有 ANSI 序列、不会被 `less` 挂住、错误消息保持英文可解析；`C.UTF-8` 同时保证 `wc -m` 按**字符**而不是字节数中文。
 - **超时 = 中途晋升**（照 ops 的 `promoted`）：前台命令到 `timeoutMs` 仍在跑时**不杀**，转成宿主后台任务，回执 `kind=promoted` + `jobId` + 已产生的部分输出；之后用 `job_output` 读、`job_kill` 停。没有 `jobs` 服务时才退回「杀整棵树 + `timedOut`」。
+- **执行层（宿主托管优先）**：`ctx.subprocess.spawn` 可用时，spawn/终止升级（PGID + taskkill）/输出预算/spill/管道生命周期全部交给宿主，本工具只负责"选 bash、组织 argv、渲染"；宿主服务缺失或 `DSH_TOOLKIT_BASH_EXECUTOR=legacy` 时退回自建 spawn（保留 pid 文件 + taskkill 兜底）。
 - **terminal 卡片契约**（宿主客户端按原始事件解析）：`description` **必填**（缺了会被当成 persistent shell，卡片消失）；回执**最后一行**固定 `[exit code: N]` 或 `[killed by signal: X]` —— 客户端据此剥离状态头并显示退出码，否则永远显示 0。
 - **逐次升级**（照 ops）：`sandbox_permissions`（`workspace-write`/`danger-full-access`）+ `justification`；只有比当前策略更宽才需要审批，走宿主 `approval.request`，**批准前绝不执行**，批准后复核策略没变（`AUTHORITY_CHANGED` 则作废）；失败码 `APPROVAL_INVALID`/`APPROVAL_UNAVAILABLE`/`APPROVAL_<OUTCOME>`。审批服务不可用时**不降级放行**。
 - **生命周期收尾**：会话/agent 销毁（`session/disposed`/`agent/disposed`）时把还活着的任务 kill 掉 —— promoted 的后台命令不会在会话结束后残留。
