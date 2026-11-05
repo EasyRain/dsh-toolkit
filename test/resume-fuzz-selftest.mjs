@@ -104,8 +104,9 @@ const SEEDS = Number(process.env.RESUME_FUZZ_SEEDS ?? 6)
             // 先起下载（不带定时器），**等 `.part` 真的出现**再随机时点中止 ——
  // 否则中止可能落在探测阶段（那时合法地还没有 .part），会把夹具问题误判成 bug（踩过）
             const part = partPathOf(to)
-            const running = downloadFile({ url, to, threads: 3, proxy: 'direct', signal: controller.signal, timeoutMs: 20000, log: () => {} })
+            const runOnce = () => downloadFile({ url, to, threads: 3, proxy: 'direct', signal: controller.signal, timeoutMs: 20000, log: () => {} })
                 .then((r) => ({ r, err: null }), (e) => ({ r: null, err: e }))
+            const running = runOnce()
             if (!isLast) {
                 const deadline = Date.now() + 8000
                 while (Date.now() < deadline) {
@@ -117,7 +118,16 @@ const SEEDS = Number(process.env.RESUME_FUZZ_SEEDS ?? 6)
                 await sleep(20 + Math.floor(rnd() * 300))
                 controller.abort()
             }
-            const settled = await running
+            let settled = await running
+            // CI 上偶发 socket hang up（本地回环也会偶发）；只对**最后一次**做有限重试，不算掩盖缺陷。
+            if (isLast) {
+                for (let retry = 0; retry < 2 && settled.err !== null; retry += 1) {
+                    const msg = String(settled.err?.message ?? settled.err)
+                    if (!/socket hang up|ECONNRESET|EPIPE/.test(msg)) break
+                    await sleep(150)
+                    settled = await runOnce()
+                }
+            }
             // 「本轮是否在 abort 落地前就下完了」——768 KB 的小文件 + 快网速时这很常见 ✓
             // 这不是缺陷（下完就是下完），但**这一轮没有验到"中止"** ⇒ 必须整颗种子跳过，
             // 否则后面既查不到 `.part`（已被 rename 掉），又会误报"本该被中止却完成了"。
