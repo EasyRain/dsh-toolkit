@@ -115,7 +115,8 @@ console.log('== 5. 新工具必须登记（注册面 ≡ 用途表） ==')
 const regNames = registered.map((t) => t.name).sort()
 const knownNames = Object.keys(PURPOSE).sort()
 const unregistered = regNames.filter((n) => !PURPOSE[n])
-const phantom = knownNames.filter((n) => !regNames.includes(n))
+// POSIX 上 bash 让位给宿主（同名不注册），所以它不该被算成幽灵条目
+const phantom = knownNames.filter((n) => !regNames.includes(n) && !(n === 'bash' && process.platform !== 'win32'))
 ok('注册的每个工具都在 PURPOSE 里', unregistered.length === 0, unregistered.join(', ') || `共 ${regNames.length} 个`)
 ok('PURPOSE 里没有已不存在的工具', phantom.length === 0, phantom.join(', ') || '')
 

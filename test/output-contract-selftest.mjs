@@ -49,7 +49,8 @@ const ctx = {
     inject: (_deps, cb) => { try { cb(ctx) } catch { /* 可选服务 */ } },
 }
 await entry.apply(ctx, {})
-ok('注册出 15 个工具（收敛：checkpoint 7→1、download 3→1、帮助 2→1、session 成对 6→4；bash/file 新增）', registered.length === 15, `${registered.length} 个`)
+const expectedRegistered = process.platform === 'win32' ? 15 : 14
+ok(`注册出 ${expectedRegistered} 个工具（POSIX 上 bash 让位给宿主；checkpoint 7→1、download 3→1、帮助 2→1、session 成对 6→4）`, registered.length === expectedRegistered, `${registered.length} 个`)
 
 // --- ① 静态 lint ------------------------------------------------------------
 /** 递归找"additionalProperties:false 但没 properties"的 object schema（宿主会拒收这类返回值） */
