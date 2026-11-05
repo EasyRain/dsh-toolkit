@@ -1,0 +1,18 @@
+# DSH bundle patch for dsh-toolkit: ONE row, loaded from the bare package name.
+#
+# Why the bare name matters (both reasons are host behaviour, verified against the host):
+#  1) The client module system attaches a package's browser half to the Loader row whose
+#     specifier is the BARE package name — "A row mounted from a subpath export never carries
+#     a half" (packages/client/ui-plugin-manager/README.md). Our settings card is that half.
+#  2) A settings form's namespace is the profile entry id, and only `.volatile()` Config fields
+#     are projected into it (packages/settings/settings/README.md). One row = one form = one
+#     place holding every family switch.
+#
+# History: family on/off was six component rows (dsh-toolkit-ast, -table, -session, -checkpoint,
+# -download, -help) whose row TITLE was the patch row "name". That shape is retired — the switches
+# now live in the bundle's own configuration card (lib/client.js) and are persisted into this row's
+# `config:` by the ConfigEditor; the host's own `settings.describe()` reports them as
+# `ns=dsh-toolkit ... {"ast":true,"table":true,...}` (beacon-verified).
+- insert:
+    - id: dsh-toolkit
+      name: dsh-toolkit

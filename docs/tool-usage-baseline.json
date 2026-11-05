@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-10-20T15:02:22.942Z",
+  "sessions": 8,
+  "requests": 10382,
+  "calls": {
+    "ast_dump_tree": 1,
+    "ast_edit": 112,
+    "ast_search": 8,
+    "ast_test_rule": 2,
+    "checkpoint": 7,
+    "download": 80,
+    "session_diff": 1,
+    "session_export": 9,
+    "session_list": 12,
+    "session_read": 9,
+    "table_diff": 28,
+    "table_peek": 10,
+    "toolkit_help": 6
+  },
+  "note": "tool-usage.mjs --write 生成；改完 schema 后回看用（归零/腰斩即报警）"
+}

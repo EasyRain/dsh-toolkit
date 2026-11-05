@@ -1,0 +1,61 @@
+# CI 门（新增）
+#
+# 三道门，各管一类"声明与磁盘不一致"：
+#   1) bin/check-package.mjs —— 可发布面自检（exports/icon/locale/files/patch id/同步面覆盖）。
+#      它会抓到我们真踩过的坑：exports 没导出卡片素材、locale 结构写成扁平、NOTICES/LICENSE 没进同步面、
+#      patch 的 id 与入口 export const name 不一致。
+#   2) scripts/measure-schemas.mjs —— schema 常驻体积报告（预算阈值断言在 test/toolkit-help-selftest.mjs 里，随全量跑）。
+#   3) test/run-all.mjs —— 35 份自测（稳定判据 = 0 failed / 0 非零退出；断言总数会随环境 ±1）。
+#     各份自测的沙盒都在**系统临时目录**（`DSH_TOOLKIT_TEST_DIR` 可覆盖），不依赖仓库外的目录布局。
+#     AST 族（ast_edit / ast_search / invariants / robustness）的模块来源顺序是**源码树优先**：
+#     CI 上依赖由 `npm install` 装进源码树 ⇒ 它们会真的跑；本机源码树没有 node_modules ⇒ 自动落到 profile 副本。
+#     另有 invariants / robustness 两份"用独立路径给真相"的套件（分页不重不漏 / text_mode 与文件对齐 /
+#     折叠不丢信息 / 真并发写 / 边界文件语料），同样是源码树优先。
+#
+# 注：`bin/install-toolkit.mjs --verify` 是**本机**用的（它把源码与本机 profile 的安装副本逐文件比对），
+# CI 里没有那些 profile ⇒ 不在这里跑（本机巡检：`node bin/install-toolkit.mjs --verify`）。
+# 注：目前仓库没有 lockfile，故用 `npm install`（可复现性待补：加 lockfile 后改 `npm ci`）。
+# 注：**门是 windows-latest**；ubuntu 以 `experimental: true` 跑同一套命令（`continue-on-error`
+#     ⇒ 它红不会挡住合并，但日志能告诉你差在哪）。为什么要观测：① AST 族能否在 linux 上装到
+#     `@ast-grep/napi` 的原生包；② 有没有残留的 Windows 行为断言。
+#     **2026-10-19 已做过一轮平台审计并修掉三处**（自测里的 `taskkill` → `process.kill`、
+#     `env.TEMP` → `tmpdir()`、`env.USERPROFILE` → `homedir()`）；lib 侧的 `reg query` 本来就有
+#     `platform !== 'win32'` 守卫、`chmod`/symlink 都有 try 包着。
+#     **2026-10-19 同日：已在 WSL2 Ubuntu（Node 22.20）上把整套跑通** —— 35 份全绿 / 0 failed。
+#     首轮红了 6 份，其中**只有 1 处是真产品问题**（`table_diff` 传大小写不匹配的普通路径时抛裸 Error ⇒
+#     现在是带指引的 ToolError），其余全是"把 Windows 的性质当通用真理"的测试（`attrib +R`、大写路径可读、
+#     一条从没跑过的符号链接断言、两处模块来源覆盖洞）。**这个 job 要回答的就是"CI 的干净检出下是否同样绿"。**
+#     等 ubuntu 连续几轮全绿，把它的 experimental 去掉就是正式加门。
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, node: '22.x', experimental: false }
+          - { os: windows-latest, node: '24.x', experimental: false }
+          - { os: ubuntu-latest, node: '22.x', experimental: true }
+          - { os: ubuntu-latest, node: '24.x', experimental: true }
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    name: ${{ matrix.os }} · node ${{ matrix.node }}${{ matrix.experimental && ' (观测，不挡合并)' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Package surface (declaration vs disk)
+        run: node bin/check-package.mjs
+      - name: Schema budget (report)
+        run: node scripts/measure-schemas.mjs
+      - name: Selftests
+        run: node test/run-all.mjs

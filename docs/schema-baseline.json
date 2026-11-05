@@ -1,0 +1,159 @@
+{
+  "format": "dsh-toolkit-schema-measurement-v1",
+  "metric": "UTF-8 bytes of compact JSON {name,description,parameters}; approximateTokens = ceil(bytes/4) (rough: CJK is 3 bytes/char, so Chinese text costs fewer tokens than this suggests)",
+  "entry": "install copy",
+  "tools": [
+    {
+      "name": "ast_edit",
+      "family": "ast",
+      "bytes": 4485,
+      "approximateTokens": 1122
+    },
+    {
+      "name": "ast_search",
+      "family": "ast",
+      "bytes": 2615,
+      "approximateTokens": 654
+    },
+    {
+      "name": "ast_dump_tree",
+      "family": "ast",
+      "bytes": 1005,
+      "approximateTokens": 252
+    },
+    {
+      "name": "ast_test_rule",
+      "family": "ast",
+      "bytes": 426,
+      "approximateTokens": 107
+    },
+    {
+      "name": "checkpoint",
+      "family": "checkpoint",
+      "bytes": 3721,
+      "approximateTokens": 931
+    },
+    {
+      "name": "download",
+      "family": "download",
+      "bytes": 3762,
+      "approximateTokens": 941
+    },
+    {
+      "name": "file",
+      "family": "file",
+      "bytes": 3341,
+      "approximateTokens": 836
+    },
+    {
+      "name": "toolkit_help",
+      "family": "help",
+      "bytes": 1128,
+      "approximateTokens": 282
+    },
+    {
+      "name": "session_list",
+      "family": "session",
+      "bytes": 2335,
+      "approximateTokens": 584
+    },
+    {
+      "name": "session_read",
+      "family": "session",
+      "bytes": 1350,
+      "approximateTokens": 338
+    },
+    {
+      "name": "session_export",
+      "family": "session",
+      "bytes": 962,
+      "approximateTokens": 241
+    },
+    {
+      "name": "session_diff",
+      "family": "session",
+      "bytes": 721,
+      "approximateTokens": 181
+    },
+    {
+      "name": "bash",
+      "family": "shell",
+      "bytes": 1043,
+      "approximateTokens": 261
+    },
+    {
+      "name": "table_diff",
+      "family": "table",
+      "bytes": 4584,
+      "approximateTokens": 1146
+    },
+    {
+      "name": "table_peek",
+      "family": "table",
+      "bytes": 1668,
+      "approximateTokens": 417
+    }
+  ],
+  "families": {
+    "ast": {
+      "tools": 4,
+      "bytes": 8531,
+      "approximateTokens": 2133
+    },
+    "checkpoint": {
+      "tools": 1,
+      "bytes": 3721,
+      "approximateTokens": 931
+    },
+    "download": {
+      "tools": 1,
+      "bytes": 3762,
+      "approximateTokens": 941
+    },
+    "file": {
+      "tools": 1,
+      "bytes": 3341,
+      "approximateTokens": 836
+    },
+    "help": {
+      "tools": 1,
+      "bytes": 1128,
+      "approximateTokens": 282
+    },
+    "session": {
+      "tools": 4,
+      "bytes": 5368,
+      "approximateTokens": 1342
+    },
+    "shell": {
+      "tools": 1,
+      "bytes": 1043,
+      "approximateTokens": 261
+    },
+    "table": {
+      "tools": 2,
+      "bytes": 6252,
+      "approximateTokens": 1563
+    }
+  },
+  "total": {
+    "tools": 15,
+    "bytes": 33146,
+    "approximateTokens": 8287
+  },
+  "resident": {
+    "toolSchemas": 33146,
+    "routingSection": 649,
+    "bytes": 33795,
+    "approximateTokens": 8449
+  },
+  "routingSection": {
+    "bytes": 649,
+    "approximateTokens": 163,
+    "lines": 6
+  },
+  "onDemand": {
+    "path": "docs/TOOLKIT.md",
+    "bytes": 58950
+  }
+}

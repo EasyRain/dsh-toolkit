@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Toolkit (dsh-toolkit)",
+    "description": "Seven families, 15 tools: table diff (table_diff/table_peek), AST search plus literal rename with coverage checks, session logs, checkpoint snapshots, multi-threaded download, a bash executor, file access (encoding probe + revision CAS), and on-demand help. Every family is **off by default** — enable them in Settings → 工具集 (help stays on)."
+  }
+}

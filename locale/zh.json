@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "工具集 (dsh-toolkit)",
+    "description": "七族 15 个工具：表 diff（table_diff/table_peek）、AST 检索与字面改名（含覆盖率校验）、会话日志、checkpoint 快照回滚、多线程下载、bash 执行器、文件读写（编码探测 + revision CAS），外加按需帮助。**各工具族默认关闭**，在「设置 → 工具集」按需开启（帮助常开）。"
+  }
+}
