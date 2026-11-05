@@ -87,7 +87,7 @@ ok('每个工具都声明了 output.render', noRender.length === 0, noRender.joi
 // **新加参数不会让它红** ⇒ 文档↔实现会悄悄漂移。这里把 13 个工具的参数集**逐字钉住**：
 // 谁加了/删了参数而没同步这份清单，这里就红（加参数时顺手更新本表即可）。
 const EXPECTED_PARAMS = {
-    bash: ['command', 'script_path', 'description', 'cwd', 'workdir', 'timeoutMs', 'graceMs', 'includeDiagnostics', 'background'],
+    bash: ['command', 'script_path', 'description', 'cwd', 'workdir', 'timeoutMs', 'graceMs', 'includeDiagnostics', 'background', 'sandbox_permissions', 'justification'],
     file: ['action', 'path', 'paths', 'ranges', 'encoding', 'maxBytes', 'content', 'bom', 'edits', 'pattern', 'replacement', 'dryRun', 'expectedRevision', 'to', 'overwrite', 'recursive', 'confirm', 'createParents'],
     ast_dump_tree: ['code', 'language', 'format', 'max_nodes', 'max_depth'],
     ast_test_rule: ['code', 'yaml'],
