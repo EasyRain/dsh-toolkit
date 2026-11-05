@@ -201,6 +201,29 @@ try {
         const pdf = write('fake.pdf', Buffer.from('%PDF-1.4\n'))
         const pdfRead = readOne(pdf)
         ok('pdf 明确拒绝并指路 office', pdfRead.ok === false && /PDF/.test(pdfRead.error), pdfRead.error)
+
+        // xlsx：workbook + rels + sharedStrings + 一个 sheet（共享字符串 / 数字 / 行号）
+        const xlsx = join(dir, 'sample.xlsx')
+        writeFileSync(xlsx, buildStoredZip([
+            { name: 'xl/workbook.xml', data: '<workbook xmlns:r="r"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+            { name: 'xl/_rels/workbook.xml.rels', data: '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>' },
+            { name: 'xl/sharedStrings.xml', data: '<sst><si><t>姓名</t></si><si><t>张三</t></si></sst>' },
+            { name: 'xl/worksheets/sheet1.xml', data: '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row><row r="2"><c r="A2"><v>42</v></c></row></sheetData></worksheet>' },
+        ]))
+        const xlsxRead = readOne(xlsx)
+        const xlsxTextAll = xlsxRead.lines.map((line) => line.line).join('\n')
+        ok('xlsx 提取工作表/共享字符串/数字', xlsxRead.ok === true && xlsxRead.encoding === 'xlsx'
+            && xlsxTextAll.includes('[Sheet: Sheet1]') && xlsxTextAll.includes('1: A1=姓名  B1=张三') && xlsxTextAll.includes('2: A2=42'), xlsxTextAll)
+
+        // pptx：按 slide 序号提取 <a:t>
+        const pptx = join(dir, 'sample.pptx')
+        writeFileSync(pptx, buildStoredZip([
+            { name: 'ppt/slides/slide1.xml', data: '<p:sld xmlns:a="a"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>标题一</a:t></a:r></a:p><a:p><a:r><a:t>第二行</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>' },
+        ]))
+        const pptxRead = readOne(pptx)
+        const pptxTextAll = pptxRead.lines.map((line) => line.line).join('\n')
+        ok('pptx 按页提取 <a:t> 文本', pptxRead.ok === true && pptxRead.encoding === 'pptx'
+            && pptxTextAll.includes('[slide 1]') && pptxTextAll.includes('标题一') && pptxTextAll.includes('第二行'), pptxTextAll)
     }
 }
 finally {
