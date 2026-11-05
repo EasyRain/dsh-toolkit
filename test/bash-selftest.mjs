@@ -17,6 +17,9 @@ import { join } from 'node:path'
 const { findBash, runBash, renderResult, tools, apply, DEFAULTS } = await import('../lib/shell/bash.js')
 
 let failures = 0
+
+/** Windows 上后台任务可能还占着临时目录（cwd），删不掉不该让自测崩掉。 */
+const bestEffortRm = (dir) => { try { rmSync(dir, { recursive: true, force: true }) } catch { /* 留给系统清理 */ } }
 const ok = (label, cond, extra = '') => {
     if (!cond) failures += 1
     console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${label}${cond || extra === '' ? '' : `   <- ${String(extra).slice(0, 240)}`}`)
@@ -261,7 +264,7 @@ console.log('== 14. 与 ops 对齐的新参数（script_path / workdir / graceMs
         ok('includeDiagnostics 时打印 cwd/timeout/grace', /diagnostics: cwd=/.test(verbose) && /graceMs=250/.test(verbose), verbose.slice(-120))
     }
     finally {
-        rmSync(dir2, { recursive: true, force: true })
+        bestEffortRm(dir2)
     }
 }
 
@@ -296,7 +299,7 @@ console.log('== 15. 后台任务（接宿主 jobs 服务）==')
         ok('没有 jobs 服务 ⇒ 明确报错而不是静默', /jobs 服务/.test(noJobs) && /ok=false/.test(noJobs), noJobs)
     }
     finally {
-        rmSync(dir4, { recursive: true, force: true })
+        bestEffortRm(dir4)
     }
 }
 
@@ -345,7 +348,7 @@ console.log('== 16. 沙箱闸门（非完全权限必须真受限，否则拒绝
         ok('Windows 拒绝时命令确实没跑', !existsSync(join(dir5, 'win32-touched.txt')))
     }
     finally {
-        rmSync(dir5, { recursive: true, force: true })
+        bestEffortRm(dir5)
     }
 }
 
@@ -403,7 +406,7 @@ console.log('== 19. 中途晋升为后台（ops 的 promoted 语义）==')
         ok('没有 jobs 服务时仍按超时杀掉', /timedOut=true/.test(killed), killed.slice(0, 140))
     }
     finally {
-        rmSync(dir6, { recursive: true, force: true })
+        bestEffortRm(dir6)
     }
 }
 
@@ -428,7 +431,7 @@ console.log('== 20. spill 上限 + 结构化失败 ==')
         const blocked = await closed.execute({ command: 'echo x' })
         ok('受限模式缺运行时带 failure=EXECUTOR_UNAVAILABLE', /\[failure: EXECUTOR_UNAVAILABLE; effects: none; retry: after-config-change\]/.test(blocked), blocked.slice(-220))
     }
-    finally { rmSync(dir7, { recursive: true, force: true }) }
+    finally { bestEffortRm(dir7) }
 }
 
 console.log('== 21. 宿主取消（停止按钮）能真正打断 ==')
@@ -496,7 +499,7 @@ console.log('== 22. 逐次升级审批（sandbox_permissions）==')
         const denied = await defDenied.execute({ command: 'echo should-not-run', sandbox_permissions: 'danger-full-access', justification: 'test' }, { agent: { session: { id: 's' } }, callId: 'c2' })
         ok('拒绝时命令不执行且带 failure=APPROVAL_DENIED', /\[failure: APPROVAL_DENIED;/.test(denied) && !/should-not-run/.test(denied), denied.slice(-200))
     }
-    finally { rmSync(dir8, { recursive: true, force: true }) }
+    finally { bestEffortRm(dir8) }
 }
 
 console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
@@ -525,7 +528,7 @@ console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
         await new Promise((resolve) => setTimeout(resolve, 300))
         ok('结算后重试直到移除（不再堆积“已结束”）', removedId === 'job-r' && removeCalls >= 3, JSON.stringify({ removeCalls, removedId }))
     }
-    finally { rmSync(dir9, { recursive: true, force: true }) }
+    finally { bestEffortRm(dir9) }
 }
 
 console.log('== 24. 宿主 terminal 卡片契约 ==')
