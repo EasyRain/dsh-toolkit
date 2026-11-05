@@ -566,6 +566,21 @@ console.log('== 25. 宿主 subprocess 路径（spawn/终止/输出交给宿主�
     setTimeout(() => controller.abort(), 80)
     const ra = await runBash('sleep', { subprocess: hostAbort, signal: controller.signal })
     ok('取消回执带 cancelled', ra.ok === false && /cancelled/i.test(ra.error ?? ''), JSON.stringify({ error: ra.error }))
+
+    let liveText = 'partial\n'
+    const liveReader = { readFrom(from) { return { text: liveText.slice(from), nextOffset: liveText.length, lossy: false } } }
+    const liveHandle = {
+        collected: { stdout: liveReader, stderr: { readFrom() { return { text: '', nextOffset: 0, lossy: false } } } },
+        done: new Promise((resolve) => setTimeout(() => { liveText += 'tail\n'; resolve({ exitCode: 0, signal: null }) }, 400)),
+        terminate() {},
+    }
+    const chunks = []
+    const hostLive = { spawn() { return liveHandle } }
+    const livePromoted = await runBash('sleep', { subprocess: hostLive, timeoutMs: 100, promoteOnTimeout: true, onChunk: (channel, text) => { if (channel === 'stdout') chunks.push(text) } })
+    setTimeout(() => { liveText += 'late\n' }, 180)
+    await livePromoted.live.done
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    ok('晋升后持续回传输出（含结束前最后一块）', chunks.join('').includes('late') && chunks.join('').includes('tail'), JSON.stringify(chunks))
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)

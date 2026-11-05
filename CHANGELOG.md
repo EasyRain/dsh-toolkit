@@ -33,6 +33,7 @@
 - **一键安装 + 开关自锁**：设置页「Bash 执行器」行右侧给**两个安装按钮**（国内镜像 npmmirror / GitHub 官方，**不做代理探测**，用户自己选）；装的是**用户级 PortableGit**（`%LOCALAPPDATA%\dsh-toolkit\git`，`PortableGit-*.7z.exe -y -o<dir>` 静默解压，实测 60 MB / 2.7 s 下载 + 11.7 s 解压），装完删安装包并**重新探测**（不信退出码）。
   宿主经 `webServer` 注册 `/dsh-toolkit/bash/{status,install}`（`install` 仅 POST + 同源校验）；客户端探测不到 bash 时**禁用该开关**并显示原因/按钮。实现：`lib/shell/{sources,install,routes}.js` + `lib/client.js`。
 - **上游跟踪（同日）**：读到 dsh-ops 的 PR #653（`restrict()` 只能遮全局名，own-scope 注册遮不住）与 #659（外部所有的 workspace 只要已授予 `WRITE_OWNER` 就应放行）—— 前者对应我们的 `host-shell`，已给永久失败加去重（同一 agent 只记一次、不重试）；后者正是本机 `dsh-toolkit` 缺 Low 完整性标签的同类问题（外来所有者），报错与修法见 TOOLKIT。
+- **修复：晋升任务的尾部输出丢失（同日）**：宿主路径靠 80 ms 轮询喂 job 缓冲，进程结束时最后一块没补交（实测 `promote-end` 丢）。结束/晋升时先 `flushChunks()` 再停轮询。
 - **执行层交给宿主（同日，#2）**：优先 `ctx.subprocess.spawn`（终止升级/输出预算/spill/管道由宿主管理），我们只留 argv 与渲染；`DSH_TOOLKIT_BASH_EXECUTOR=legacy` 或服务缺失时退回自建 spawn。
 - **terminal 卡片契约（同日）**：`description` 改为必填；回执末尾追加 `[exit code: N]`/`[killed by signal: X]`，让宿主客户端把 bash 结果渲染成 terminal 卡片并显示正确退出码（原来缺这行会永远显示 0）。
 - **修复：前台命令在「后台任务」里堆积“已结束”（同日）**：宿主 `jobs.remove(id, caller)` 要求**已终态 + 正确 owner**；原来不带 owner、结算瞬间就调用，异常被吞 ⇒ 37 条残留。改为带 owner、50 ms 重试到终态。历史残留需手动「清空」，之后不再增长。
