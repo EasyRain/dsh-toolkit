@@ -16,6 +16,7 @@
 - **读取协议升级（同日，按 ops 的实战方案补）**：read 现在回 **整文件 revision**（读→改可直接 CAS）、**`complete`/`nextOffset`**（续读）、**`truncatedInLine`**（超长行被切到 2000 字符，与"没读完"分开）、**多文件共享 2 MB 总预算**、**`N|` 紧凑行号 + 可逆转义**、同目录 **`[Base: …]`**。**没有抄"上下文读取去重"**：它依赖宿主 `tools/result` + `llm/stream` 的证据链证明正文仍在最近一次请求里；拿不到这层证据就做，会在上下文压缩后悄悄吞内容。
 - **`replace` 动作（同日，ops_replace 的替代）**：`pattern`（字面）+ `replacement`，对 `path`/`paths`（文件 / 目录 / glob）批量替换；**默认只预览**（`dryRun:true`），`dryRun:false` 才写；回执给命中处数、行号与写后 revision；二进制跳过、GB18030 命中拒绝、单次 ≤50 文件。
 - **`read` 支持 `.docx`（同日）**：`word/document.xml` 按段落提取正文（还原 `&amp;` 等实体、`<w:tab/>`/`<w:br/>`），`ranges` 按段落算；**不做完整渲染**（样式/表格/页眉页脚/图片不处理）。`.pdf` 仍明确拒绝并指向 `office` 技能 —— 不在插件里塞 PDF 解析器（体积/维护都不划算）。
+- **失败回执补 `effectState`（同日）**：`none` / `applied` / `unknown` —— 复制中途失败记 `unknown`，跨卷移动"复制成功但删源失败"记 `applied` 并明确写出，避免模型把"已经改了的东西"再改一遍。
 - 成本：`file` 族 **3,182 B（796 tok）**；全量基线 29,783 → **32,987 B（+10.8%）**，已重冻。自测新增 `test/file-read-selftest.mjs`（28 条）与 `test/file-write-selftest.mjs`（26 条）⇒ **34 套件 + check-package 全绿，112.8 s**。
 
 **🧩 新增 `shell` 族：`bash`（2026-11-05，内核 0.2.2 移除 `ops_bash` 后的自建替代）**

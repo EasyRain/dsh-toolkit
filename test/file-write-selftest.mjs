@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const { writeFileOp, editFileOp, copyFileOp, moveFileOp, removeFileOp, mkdirOp, statOp, currentRevision, replaceInFileOp } = await import('../lib/file/write.js')
+const { writeFileOp, editFileOp, copyFileOp, moveFileOp, removeFileOp, mkdirOp, statOp, currentRevision, replaceInFileOp, renderOpResult } = await import('../lib/file/write.js')
 const { tools } = await import('../lib/file/index.js')
 
 let failures = 0
@@ -121,7 +121,17 @@ try {
         ok('工具级 dryRun:false 写盘', /已写入/.test(written) && readFileSync(a, 'utf8') === 'X bar X\nbaz X\n', written)
     }
 
-    console.log('== 5. 工具形状 ==')
+    console.log('== 5. effectState（失败时区分"没生效 / 已生效 / 不确定"）==')
+    {
+        const text = renderOpResult({ ok: false, action: 'write', path: 'x', message: 'CAS 失败' })
+        ok('校验类失败 ⇒ effectState=none', /effectState=none/.test(text), text)
+        const missing = copyFileOp({ path: join(dir, 'no-such-file'), to: join(dir, 'copy-target') })
+        ok('复制 IO 失败 ⇒ effectState=unknown', missing.ok === false && missing.effectState === 'unknown', JSON.stringify(missing))
+        const absent = removeFileOp({ path: join(dir, 'nope.bin'), confirm: true })
+        ok('删除不存在的路径 ⇒ 校验失败，渲染为 none', absent.ok === false && /effectState=none/.test(renderOpResult(absent)))
+    }
+
+    console.log('== 6. 工具形状 ==')
     {
         const seen = []
         const def = tools((d) => { seen.push(d); return d }, { resolveWorkspaceCwd: () => 'D:/DshWorkSpace/Addons' })[0]

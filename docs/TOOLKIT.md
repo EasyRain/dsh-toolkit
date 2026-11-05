@@ -50,6 +50,7 @@
 - **copy / move**：`to` 与 `path` 同一基准；默认不覆盖（`overwrite:true` 才覆盖）；move 跨卷失败会退化成"复制 + 删源"并在回执里说明。
 - **remove**：默认只**预览**（`dryRun`）；真删要 `confirm:true`，目录还要 `recursive:true`；盘根/家目录直接拒绝。
 - **mkdir / stat**：递归建目录；stat 给大小 / mtime / revision。
+- **失败回执带 `effectState`**（照 ops 的错误模型）：`none` = 没生效、可安全重试；`applied` = 部分已生效（例如复制成功但删源失败）；`unknown` = 可能写了一半（复制/删除中途失败），**先核对再重试**，别盲目重放。
 - **与宿主 `read`/`write` 的分工**：编码不确定、要一次多区间/多文件、要 CAS 或原子写 ⇒ 用本工具；纯 UTF-8 单文件随手读，宿主 `read` 也一样。
 
 ## table-diff
