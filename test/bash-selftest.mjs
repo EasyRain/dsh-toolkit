@@ -360,5 +360,12 @@ console.log('== 17. 平台注册面（POSIX 让位给宿主 bash）==')
     ok('POSIX/Windows 都只注册同名工具（宿主 UI 显示「运行命令」）', registered[0]?.name === 'bash')
 }
 
+console.log('== 18. 环境净化（照 ops：无颜色、无分页器、英文消息）==')
+{
+    const r = await runBash('printf "%s|%s|%s|%s" "$NO_COLOR" "$TERM" "$PAGER" "$LC_MESSAGES"')
+    ok('NO_COLOR/TERM/PAGER/LC_MESSAGES 固定', r.stdout === '1|dumb|cat|C', JSON.stringify(r.stdout))
+    ok('UTF-8 locale 保留（中文按字符不按字节）', (await runBash('printf %s "中文" | wc -m')).stdout.trim() === '2')
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
 process.exitCode = failures === 0 ? 0 : 1
