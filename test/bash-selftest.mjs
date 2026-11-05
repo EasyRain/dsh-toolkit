@@ -424,5 +424,30 @@ console.log('== 20. spill 上限 + 结构化失败 ==')
     finally { rmSync(dir7, { recursive: true, force: true }) }
 }
 
+console.log('== 21. 宿主取消（停止按钮）能真正打断 ==')
+{
+    const envOut = await runBash('printf "%s|%s" "$GIT_TERMINAL_PROMPT" "$GCM_INTERACTIVE"')
+    ok('git 不会弹凭据交互（GIT_TERMINAL_PROMPT/GCM_INTERACTIVE）', envOut.stdout === '0|never', JSON.stringify(envOut.stdout))
+
+    const controller = new AbortController()
+    const started = Date.now()
+    const pending = runBash('sleep 5; echo late', { signal: controller.signal })
+    setTimeout(() => controller.abort(), 200)
+    const cancelled = await pending
+    const elapsed = Date.now() - started
+    ok('bash 被宿主取消 ⇒ 快速返回 cancelled', cancelled.ok === false && /cancelled/i.test(cancelled.error ?? '') && elapsed < 3000, JSON.stringify({ elapsed, error: cancelled.error }))
+
+    const def = tools((tool) => tool, { resolveWorkspaceCwd: () => tmpdir() })[0]
+    const c2 = new AbortController()
+    const pending2 = def.execute({ command: 'sleep 5' }, { signal: c2.signal })
+    setTimeout(() => c2.abort(), 150)
+    const text = await pending2
+    const pre = new AbortController()
+    pre.abort()
+    const preRes = await runBash('echo x', { signal: pre.signal })
+    ok('进进程前已取消 ⇒ 直接 cancelled', preRes.ok === false && /cancelled/i.test(preRes.error ?? ''))
+    ok('工具层取消回执带 [aborted] 与 failure=CANCELLED', /\[aborted\]/.test(text) && /\[failure: CANCELLED;/.test(text), text.slice(-200))
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
 process.exitCode = failures === 0 ? 0 : 1

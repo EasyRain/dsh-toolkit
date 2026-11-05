@@ -29,6 +29,7 @@
 - **非交互**：stdin 关闭，`read`/`sudo`/`ssh` 这类提示会挂到超时（默认 60 s，最大 600 s）。超时**杀整棵进程树**：先杀 MSYS 进程组（`kill -9 -<pgid>`），再用 `taskkill /T /F` 兜底 —— 只 `child.kill()` 会留孙进程；而 MSYS `fork` 出来的子进程连 `taskkill /T` 都抓不到（它的 Windows PPID 指向已退出的辅助进程），所以必须两路一起。
 - **环境净化（照 ops）**：给子进程固定 `NO_COLOR=1`、`TERM=dumb`、`PAGER=cat`、`GIT_PAGER=cat`、`LC_MESSAGES=C`、`LC_ALL=C.UTF-8` —— 没有 ANSI 序列、不会被 `less` 挂住、错误消息保持英文可解析；`C.UTF-8` 同时保证 `wc -m` 按**字符**而不是字节数中文。
 - **超时 = 中途晋升**（照 ops 的 `promoted`）：前台命令到 `timeoutMs` 仍在跑时**不杀**，转成宿主后台任务，回执 `kind=promoted` + `jobId` + 已产生的部分输出；之后用 `job_output` 读、`job_kill` 停。没有 `jobs` 服务时才退回「杀整棵树 + `timedOut`」。
+- **可取消**（重要）：接宿主的 `exec.signal`（点「停止」或结束会话都会发）⇒ 与超时同样的两路杀进程树 + **主动关管道**（防止凭据管理器/ssh 搵着写端让 `close` 不触发），回执带 `[aborted]` + `failure: CANCELLED`。git 这类可能等凭据的命令固定 `GIT_TERMINAL_PROMPT=0`、`GCM_INTERACTIVE=never`：需要凭据时**直接失败**，不会弹窗/挂住。
 - **落盘上限**：spill 最多 **64 MB**（`maxSpillBytes` 可调低）；超过就停止写入并回 `spillTruncated`，不会把临时盘写满。
 - **失败契约**（照 ops）：失败时回执追加 `[failure: CODE; effects: none|unknown; retry: never|after-input-change|after-config-change] nextAction`；常见 CODE：`EXECUTOR_UNAVAILABLE` / `SANDBOX_UNAVAILABLE` / `SANDBOX_DENIED` / `TIMEOUT` / `EXIT_NONZERO` / `CANCELLED` / `SPAWN_FAILED`。
 - **输出**：默认上限 2 MB，超出置 `truncated:true`，并把**完整输出落盘**（回执给 `spillPath`，用 `file read` 分段看）；stdout/stderr 原样回显，不做转义，`ok` 只在退出码 0 且未超时时为真。
