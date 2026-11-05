@@ -158,7 +158,7 @@ console.log('== 11. 工具定义形状（宿主注册契约）==')
     const def = seen[0] ?? {}
     ok('名字是 bash', def.name === 'bash')
     ok('参数是字段映射方言（command 与 script_path 二选一，均非必填）', typeof def.parameters?.command?.type === 'string' && def.parameters?.command?.required !== true && typeof def.parameters?.script_path?.type === 'string')
-    ok('参数面 = ops 那套（command/script_path/description/cwd/workdir/timeoutMs/graceMs/includeDiagnostics）', Object.keys(def.parameters ?? {}).sort().join(',') === 'command,cwd,description,graceMs,includeDiagnostics,script_path,timeoutMs,workdir', Object.keys(def.parameters ?? {}).join(','))
+    ok('参数面 = ops 那套 + background', Object.keys(def.parameters ?? {}).sort().join(',') === 'background,command,cwd,description,graceMs,includeDiagnostics,script_path,timeoutMs,workdir', Object.keys(def.parameters ?? {}).join(','))
     ok('有 output.schema 与 render', def.output?.schema !== undefined && typeof def.output?.render === 'function')
     ok('描述里写清了非交互与超时', /Non-interactive/.test(def.description) && /timeout/i.test(def.description))
 }
@@ -252,6 +252,41 @@ console.log('== 14. 与 ops 对齐的新参数（script_path / workdir / graceMs
     }
     finally {
         rmSync(dir2, { recursive: true, force: true })
+    }
+}
+
+console.log('== 15. 后台任务（接宿主 jobs 服务）==')
+{
+    const dir4 = mkdtempSync(join(tmpdir(), 'tk bash bg-'))
+    try {
+        let captured = null
+        const fakeJobs = { start(options) { captured = options; return 'job-7' } }
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dir4, getJobs: () => fakeJobs })[0]
+        const text = await def.execute({ command: 'echo bg-hi', background: true, description: 'say hi' }, { agent: { id: 'agent-1' } })
+        ok('background 返回 jobId 与用法', /kind=background/.test(text) && /jobId=job-7/.test(text) && /job_output/.test(text), text)
+        ok('jobs.start 收到 kind/label/owner/output', captured?.kind === 'bash' && captured?.label === 'say hi' && captured?.owner === 'agent-1' && captured?.output?.length === 2 && captured.output[0].channel === 'stdout', JSON.stringify({ kind: captured?.kind, label: captured?.label, owner: captured?.owner }))
+        const run = captured.run()
+        const done = await run.done
+        ok('后台任务结束 ⇒ completed', done.status === 'completed', JSON.stringify(done))
+        ok('输出经 reader 可读', captured.output[0].read(0).text.includes('bg-hi'), captured.output[0].read(0).text)
+        ok('reader 的 nextOffset 跟上', captured.output[0].read(0).nextOffset > 0)
+
+        let captured2 = null
+        const jobs2 = { start(options) { captured2 = options; return 'job-8' } }
+        const def2 = tools((tool) => tool, { resolveWorkspaceCwd: () => dir4, getJobs: () => jobs2 })[0]
+        const text2 = await def2.execute({ command: 'sleep 3', background: true }, {})
+        ok('第二个任务也返回 jobId', /job-8/.test(text2))
+        const run2 = captured2.run()
+        run2.cancel('stop it')
+        const done2 = await run2.done
+        ok('cancel 后 done 报 killed', done2.status === 'killed', JSON.stringify(done2))
+
+        const def3 = tools((tool) => tool, { resolveWorkspaceCwd: () => dir4 })[0]
+        const noJobs = await def3.execute({ command: 'echo x', background: true })
+        ok('没有 jobs 服务 ⇒ 明确报错而不是静默', /jobs 服务/.test(noJobs) && /ok=false/.test(noJobs), noJobs)
+    }
+    finally {
+        rmSync(dir4, { recursive: true, force: true })
     }
 }
 
