@@ -353,6 +353,8 @@ console.log('== 17. 平台注册面（POSIX 让位给宿主 bash）==')
 {
     const registered = []
     const fake = { tools: { register: (tool) => registered.push(tool) }, get: () => undefined }
+    const { platformSupportsShell } = await import('../lib/configure.js')
+    ok('shell 族只支持 Windows', platformSupportsShell('linux') === false && platformSupportsShell('darwin') === false && platformSupportsShell('win32') === true)
     const posixCount = apply(fake, (tool) => tool, { platform: 'linux' })
     ok('POSIX 不注册（宿主已有 bash）', posixCount === 0 && registered.length === 0, String(posixCount))
     const winCount = apply(fake, (tool) => tool, { platform: 'win32' })

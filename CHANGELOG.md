@@ -35,6 +35,7 @@
 - **上游跟踪（同日）**：读到 dsh-ops 的 PR #653（`restrict()` 只能遮全局名，own-scope 注册遮不住）与 #659（外部所有的 workspace 只要已授予 `WRITE_OWNER` 就应放行）—— 前者对应我们的 `host-shell`，已给永久失败加去重（同一 agent 只记一次、不重试）；后者正是本机 `dsh-toolkit` 缺 Low 完整性标签的同类问题（外来所有者），报错与修法见 TOOLKIT。
 - **中途晋升为后台（同日，照 ops 的 promoted）**：前台命令到 `timeoutMs` 仍未结束时**不杀**，改为转成宿主后台任务并回 `kind=promoted` + `jobId` + 已产生的部分输出；长任务不必取消重跑。无 `jobs` 服务时维持原行为（杀树 + `timedOut`）。
 - **环境净化（同日，照 ops）**：子进程固定 `NO_COLOR`/`TERM=dumb`/`PAGER=cat`/`GIT_PAGER=cat`/`LC_MESSAGES=C`，`LC_ALL=C.UTF-8`；无 ANSI、不会被分页器挂住，中文仍按字符计数。
+- **平台收口修正（同日）**：POSIX 上不再「注册后让位」，而是把 `shell` 族**直接判为不可用**（`familyEnabled` 返回 false），设置页开关禁用并提示「宿主自带 bash 接管」。Linux 上不需要本插件插一脚。
 - **平台收口（同日）**：`bash` 只在 Windows 注册；POSIX 上宿主自带 `bash`，同名会撞车 ⇒ `apply()` 直接让位（返回 0）。顺带确认了宿主 UI 的工具标题机制：`TOOL_VARIANTS` 把 `bash`/`pwsh` 映射到「运行命令」，未知名字（如 `ops_bash`）落到「调用工具」。
 - **沙箱闸门（同日）**：非 `danger-full-access` 会话现在必须过宿主 `sandboxPolicy.resolve` + `sandbox.confine`，用受限 argv 执行；拿不到 confinement 或结果无效 ⇒ **拒绝执行**（`SANDBOX_UNAVAILABLE`，命令未跑）。
   **Windows 受限模式**：系统 Git Bash 在沙箱里起不来（MSYS 信号管道被拒，`0xC0000142`）⇒ **复用 dsh-ops 的私有 MSYS**（`confinedBash()` + `@dsh-ops/bash-win32-x64`，首次约 174 MB 复制量）再走 `sandbox.confine`；dsh-ops 缺失时明确拒绝。受限会话**不再隐藏 pwsh**（否则一个 shell 都没有）。
