@@ -516,6 +516,14 @@ console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
         const off = bashModule.mountJobCleanup({ on(event, handler) { handlers[event] = handler; return () => {} } })
         ok('挂上 agent/session 销毁事件', typeof handlers['agent/disposed'] === 'function' && typeof handlers['session/disposed'] === 'function')
         off()
+
+        let removeCalls = 0
+        let removedId = null
+        const jobs3 = { start() { return 'job-r' }, remove(id) { removeCalls += 1; if (removeCalls < 3) throw new Error('job still running'); removedId = id } }
+        const defR = tools((tool) => tool, { resolveWorkspaceCwd: () => dir9, getJobs: () => jobs3 })[0]
+        await defR.execute({ command: 'echo retry-drop' }, { agent: { id: 'a1', session: { id: 's2' } } })
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        ok('结算后重试直到移除（不再堆积“已结束”）', removedId === 'job-r' && removeCalls >= 3, JSON.stringify({ removeCalls, removedId }))
     }
     finally { rmSync(dir9, { recursive: true, force: true }) }
 }
