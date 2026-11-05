@@ -12,6 +12,46 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { crc32 } from 'node:zlib'
+
+/** 最小 stored（不压缩）zip 写入器：只为造一个 .docx 测试样本，不引依赖。 */
+function buildStoredZip(entries) {
+    const chunks = []
+    const central = []
+    let offset = 0
+    for (const entry of entries) {
+        const name = Buffer.from(entry.name, 'utf8')
+        const data = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(entry.data)
+        const crc = crc32(data) >>> 0
+        const local = Buffer.alloc(30)
+        local.writeUInt32LE(0x04034b50, 0)
+        local.writeUInt16LE(20, 4)
+        local.writeUInt32LE(crc, 14)
+        local.writeUInt32LE(data.length, 18)
+        local.writeUInt32LE(data.length, 22)
+        local.writeUInt16LE(name.length, 26)
+        chunks.push(local, name, data)
+        const cd = Buffer.alloc(46)
+        cd.writeUInt32LE(0x02014b50, 0)
+        cd.writeUInt16LE(20, 4)
+        cd.writeUInt16LE(20, 6)
+        cd.writeUInt32LE(crc, 16)
+        cd.writeUInt32LE(data.length, 20)
+        cd.writeUInt32LE(data.length, 24)
+        cd.writeUInt16LE(name.length, 28)
+        cd.writeUInt32LE(offset, 42)
+        central.push(cd, name)
+        offset += 30 + name.length + data.length
+    }
+    const directory = Buffer.concat(central)
+    const eocd = Buffer.alloc(22)
+    eocd.writeUInt32LE(0x06054b50, 0)
+    eocd.writeUInt16LE(entries.length, 8)
+    eocd.writeUInt16LE(entries.length, 10)
+    eocd.writeUInt32LE(directory.length, 12)
+    eocd.writeUInt32LE(offset, 16)
+    return Buffer.concat([...chunks, directory, eocd])
+}
 
 const { readOne, decodeBuffer, parseRange, renderReport, hexPreview, LIMITS } = await import('../lib/file/read.js')
 
@@ -143,6 +183,25 @@ try {
     console.log('== 8. 常量 ==')
     ok('默认上限 1 MB / 总预算 2 MB / 20 文件 / 20 段', LIMITS.maxBytes === 1024 * 1024 && LIMITS.totalBytes === 2 * 1024 * 1024 && LIMITS.maxFiles === 20 && LIMITS.maxRanges === 20)
     ok('单行上限 2000 字符', LIMITS.maxLineChars === 2000)
+
+    console.log('== 9. docx 与 pdf ==')
+    {
+        const xml = '<?xml version="1.0"?><w:document xmlns:w="x"><w:body>'
+            + '<w:p><w:r><w:t>第一段</w:t></w:r></w:p>'
+            + '<w:p><w:r><w:t>第二段 &amp; 转义</w:t></w:r><w:r><w:tab/><w:t>尾</w:t></w:r></w:p>'
+            + '</w:body></w:document>'
+        const docx = join(dir, 'sample.docx')
+        writeFileSync(docx, buildStoredZip([{ name: 'word/document.xml', data: Buffer.from(xml, 'utf8') }]))
+        const docxRead = readOne(docx)
+        ok('docx 提取段落并还原转义/制表', docxRead.ok === true && docxRead.encoding === 'docx' && docxRead.lines[0].line === '第一段' && docxRead.lines[1].line === '第二段 & 转义\t尾', JSON.stringify(docxRead.lines))
+        ok('docx 也回 revision', /^[0-9a-f]{64}$/.test(docxRead.revision ?? ''))
+        const docxRange = readOne(docx, { ranges: ['2'] })
+        ok('docx 的 ranges 按段落算', docxRange.lines.length === 1 && docxRange.lines[0].number === 2)
+
+        const pdf = write('fake.pdf', Buffer.from('%PDF-1.4\n'))
+        const pdfRead = readOne(pdf)
+        ok('pdf 明确拒绝并指路 office', pdfRead.ok === false && /PDF/.test(pdfRead.error), pdfRead.error)
+    }
 }
 finally {
     rmSync(dir, { recursive: true, force: true })
