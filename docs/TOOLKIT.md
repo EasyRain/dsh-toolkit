@@ -54,7 +54,7 @@
 
 ## file
 
-`file` —— 一个工具九个动作：`read` / `stat` / `write` / `edit` / `replace` / `copy` / `move` / `remove` / `mkdir`（不传 `action` 时按 `read`）。
+`file` —— 一个工具十个动作：`read` / `stat` / **`diff`** / `write` / `edit` / `replace` / `copy` / `move` / `remove` / `mkdir`（不传 `action` 时按 `read`）。
 
 - **read**：多文件（`path` / `paths`，最多 20）+ 每文件多区间（`ranges: ["1-40","120"]`，1 基含两端）。编码自动探测：**BOM → 严格 UTF-8 → 严格 GB18030**，并回报依据；都失败就明确报"有 N 个 U+FFFD"。二进制（前 8 KB 有 NUL）给 **hex 预览**而不是乱码。OOXML 直接提取文本：`.docx` 按段落、`.xlsx` 按工作表/行（`A1=值`）、`.pptx` 按页（`<a:t>`），`encoding` 分别回 `docx`/`xlsx`/`pptx`，`ranges` 按提取后的行算；**都不做完整渲染**（样式/表格合并/图片/公式计算不处理，上限 5 表 / 500 行 / 100 页）。`.pdf` 明确拒绝并指向 `office` 技能。
 - **读取回执（照抄 ops 的续读协议，实测好用）**：每次 read 都回 **`revision`**（整文件 sha256，可直接拿去做 `edit` 的 CAS，不必再读一遍）；
@@ -63,6 +63,7 @@
 - **紧凑格式**：同一父目录的多个文件共享一行 `[Base: "D:\dir"]`，块头是 `=== FILE: "a.txt" (Lines 1-40 of 200) ===`；
   行号是 `N| `（不补空格），正文做**可逆转义**（`\` → `\\`、tab → `\t`、控制字符 → `\uXXXX`）—— 防止文件内容伪造出额外的行号/标题。
 - **总预算**：单文件默认 1 MB，**一次调用合计 2 MB**（多文件共享；用尽后剩余文件直接报"预算用尽，分批读"）。
+- **diff**：`path` + `content`（拟写入的完整内容）⇒ **只读预览**：按行做公共前缀/后缀修剪，只输出**一个替换 hunk**（不做最小 diff）；带 old/new sha256 与行数，`offset`/`limit`/`context` 分页（默认 100 行 / 3 行上下文）；BOM、CRLF、尾换行差异会单独指出；**永不写盘**。与 `table_diff`（两表按键比对）和 `ast_edit` 的 staged 预览不是一回事。
 - **write**：整文件写 UTF-8（`bom:true` 加 BOM）；**原子写**（同目录临时文件 + rename）。
 - **edit**：若干 `{oldText,newText}`，**每段必须唯一命中、且互不重叠**，否则整单失败（不做部分应用）；按原编码写回、保留 BOM 与 CRLF。**GB18030 无法编码 ⇒ 明确拒绝**（先转 UTF-8，别悄悄改编码）。
 - **replace**：`pattern`（**字面**文本，不是正则）+ `replacement`，对 `path` / `paths`（文件 / 目录 / glob）批量替换；**默认只预览**（`dryRun:true`，报每个文件几处、在哪几行），要真写必须 `dryRun:false`。二进制跳过；GB18030 文件命中会拒绝（先转 UTF-8）；一次最多扫 50 个文件。

@@ -137,8 +137,8 @@ try {
         const def = tools((d) => { seen.push(d); return d }, { resolveWorkspaceCwd: () => 'D:/DshWorkSpace/Addons' })[0]
         ok('只注册 1 个工具', seen.length === 1)
         ok('名字是 file', def.name === 'file')
-        ok('action 是唯一必填且含 9 个动作', def.parameters.action.required === true && def.parameters.action.enum.length === 9, JSON.stringify(def.parameters.action.enum))
-        ok('9 个动作都写进了描述', def.parameters.action.enum.every((item) => def.description.includes(item)))
+        ok('action 是唯一必填且含 10 个动作', def.parameters.action.required === true && def.parameters.action.enum.length === 10, JSON.stringify(def.parameters.action.enum))
+        ok('10 个动作都写进了描述', def.parameters.action.enum.every((item) => def.description.includes(item)))
         ok('关键参数齐全', ['path', 'paths', 'ranges', 'encoding', 'content', 'edits', 'pattern', 'replacement', 'dryRun', 'expectedRevision', 'to', 'overwrite', 'recursive', 'confirm'].every((key) => key in def.parameters), Object.keys(def.parameters).join(','))
         ok('有 output.schema 与 render', def.output?.schema !== undefined && typeof def.output?.render === 'function')
     }

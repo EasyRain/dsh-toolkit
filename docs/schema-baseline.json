@@ -42,8 +42,8 @@
     {
       "name": "file",
       "family": "file",
-      "bytes": 3969,
-      "approximateTokens": 993
+      "bytes": 4479,
+      "approximateTokens": 1120
     },
     {
       "name": "toolkit_help",
@@ -112,8 +112,8 @@
     },
     "file": {
       "tools": 1,
-      "bytes": 3969,
-      "approximateTokens": 993
+      "bytes": 4479,
+      "approximateTokens": 1120
     },
     "help": {
       "tools": 1,
@@ -138,14 +138,14 @@
   },
   "total": {
     "tools": 15,
-    "bytes": 34847,
-    "approximateTokens": 8712
+    "bytes": 35357,
+    "approximateTokens": 8840
   },
   "resident": {
-    "toolSchemas": 34847,
+    "toolSchemas": 35357,
     "routingSection": 649,
-    "bytes": 35496,
-    "approximateTokens": 8874
+    "bytes": 36006,
+    "approximateTokens": 9002
   },
   "routingSection": {
     "bytes": 649,
@@ -154,6 +154,6 @@
   },
   "onDemand": {
     "path": "docs/TOOLKIT.md",
-    "bytes": 66487
+    "bytes": 66937
   }
 }
