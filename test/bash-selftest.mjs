@@ -367,5 +367,36 @@ console.log('== 18. 环境净化（照 ops：无颜色、无分页器、英文�
     ok('UTF-8 locale 保留（中文按字符不按字节）', (await runBash('printf %s "中文" | wc -m')).stdout.trim() === '2')
 }
 
+console.log('== 19. 中途晋升为后台（ops 的 promoted 语义）==')
+{
+    const dir6 = mkdtempSync(join(tmpdir(), 'tk bash promote-'))
+    try {
+        const direct = await runBash('echo before; sleep 5', { timeoutMs: 400, promoteOnTimeout: true })
+        ok('到点不杀，返回 promoted + live', direct.promoted === true && typeof direct.live?.done?.then === 'function', JSON.stringify(Object.keys(direct)))
+        ok('partial 里保留晋升前的输出', String(direct.partial?.stdout ?? '').includes('before'), JSON.stringify(direct.partial?.stdout))
+        direct.live.kill()
+        const settled = await direct.live.done
+        ok('晋升后进程仍可结束/收尸', settled.status === 'failed' || settled.exitCode === null, JSON.stringify(settled))
+
+        let captured = null
+        const jobs = { start(options) { captured = options; return 'job-9' } }
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6, getJobs: () => jobs })[0]
+        const text = await def.execute({ command: 'sleep 5; echo late', timeoutMs: 300, description: 'long one' }, { agent: { id: 'a1' } })
+        ok('工具层返回 kind=promoted + jobId', /kind=promoted/.test(text) && /jobId=job-9/.test(text) && /job_output/.test(text), text.slice(0, 200))
+        ok('jobs.start 收到 kind/label/output', captured?.kind === 'bash' && captured?.label === 'long one' && captured?.output?.length === 2, JSON.stringify({ kind: captured?.kind, label: captured?.label }))
+        const run = captured.run()
+        run.cancel('stop')
+        const done = await run.done
+        ok('取消后任务结束', done.status === 'failed' || done.exitCode !== 0, JSON.stringify(done))
+
+        const def2 = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6 })[0]
+        const killed = await def2.execute({ command: 'sleep 5', timeoutMs: 300 })
+        ok('没有 jobs 服务时仍按超时杀掉', /timedOut=true/.test(killed), killed.slice(0, 140))
+    }
+    finally {
+        rmSync(dir6, { recursive: true, force: true })
+    }
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
 process.exitCode = failures === 0 ? 0 : 1
