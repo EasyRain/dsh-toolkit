@@ -200,7 +200,9 @@ console.log('== real entry: six sections register through ONE apply() ==')
     const depFree = ['download', 'table_diff', 'table_peek', 'session_list', 'session_read', 'session_diff', 'session_export',
         'checkpoint', 'toolkit_help']
     ok('无外部依赖的各族 + 帮助全部注册（9 个）', depFree.every((n) => names.includes(n)), `${names.length} 个`)
-    if (names.length === 15) ok('安装副本下 15 个工具全注册（含 AST 族、bash 与 file；帮助已并入 toolkit_help）', ['ast_search', 'ast_edit', 'ast_dump_tree', 'ast_test_rule', 'bash', 'file'].every((n) => names.includes(n)))
+    // POSIX 上 bash 让位给宿主自带的 bash（同名不注册）⇒ 期望少一个
+    const expectedTools = process.platform === 'win32' ? 15 : 14
+    if (names.length === expectedTools) ok(`安装副本下 ${expectedTools} 个工具全注册（含 AST 族与 file；POSIX 上 bash 让位给宿主）`, ['ast_search', 'ast_edit', 'ast_dump_tree', 'ast_test_rule', 'file', ...(process.platform === 'win32' ? ['bash'] : [])].every((n) => names.includes(n)))
     else ok(`源树下 AST 族按设计被隔离（${names.length} 个工具；缺的正是需要 @ast-grep/napi 的那 4 个（+ session 合并后总数更少））`, names.length === 9 && !names.includes('ast_edit'))
     ok('名字无重复', new Set(names).size === names.length)
     ok('每个工具都有 description(>20) 与 parameters/output', got.every((t) => typeof t.description === 'string' && t.description.length > 20 && t.parameters && t.output))
@@ -268,11 +270,12 @@ console.log('== schema 形状契约（宿主 DSL 的硬规则）==')
             }
             await mod.apply(ctxTry, {})
             if (got.length > tools.length) { tools = got; entryFrom = label }
-            if (tools.length === 15) break
+            if (tools.length === (process.platform === 'win32' ? 15 : 14)) break
         }
         catch { /* 试下一个 */ }
     }
-    ok('入口注册出 15 个工具（形状契约的覆盖面）', tools.length === 15, `来源=${entryFrom} n=${tools.length}`)
+    const requiredTools = process.platform === 'win32' ? 15 : 14
+    ok(`入口注册出 ${requiredTools} 个工具（形状契约的覆盖面）`, tools.length === requiredTools, `来源=${entryFrom} n=${tools.length}`)
     for (const t of tools) {
         walk(t.parameters ?? {}, `${t.name}.parameters`)
         walk(t.output?.schema ?? {}, `${t.name}.output.schema`)
