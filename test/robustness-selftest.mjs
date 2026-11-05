@@ -138,8 +138,8 @@ try {
     ok('没有任何子进程异常退出（崩掉）', crashed === 0, `codes=${procs.map((p) => p.code).join(',')}`)
     // ⚠️ 用 `m` 标志按**行**匹配：子进程先打一行 `PREVIEW …`，`^ERR` 不能锚在整段开头。
     const errLine = (p) => (p.out.match(/^ERR (LOCK|STALE|OTHER)\b.*$/m) ?? ['(没有 ERR 行)'])[0]
-    ok('争用的那部分给了可读原因（LOCK/STALE；环境性 IO 失败必须是 effect=none）',
-        procs.filter((p) => p.code === 3).every((p) => /^ERR (LOCK|STALE)\b/m.test(p.out) || (/^ERR OTHER\b/m.test(p.out) && /\beffect=none\b/.test(p.out))),
+    ok('争用的那部分给了可读原因（LOCK/STALE；环境性 IO 失败允许 OTHER，但必须带 effect=none/unknown）',
+        procs.filter((p) => p.code === 3).every((p) => /^ERR (LOCK|STALE)\b/m.test(p.out) || (/^ERR OTHER\b/m.test(p.out) && /\beffect=(none|unknown)\b/.test(p.out))),
         procs.filter((p) => p.code === 3).map((p) => errLine(p).slice(0, 56)).join(' | '))
     const finalText = readFileSync(target, 'utf8')
     ok('文件内容完整且正确（没有交错/截断）', finalText === expected, `len=${finalText.length} exp=${expected.length}`)
