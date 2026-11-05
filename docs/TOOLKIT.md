@@ -30,6 +30,7 @@
 - **环境净化（照 ops）**：给子进程固定 `NO_COLOR=1`、`TERM=dumb`、`PAGER=cat`、`GIT_PAGER=cat`、`LC_MESSAGES=C`、`LC_ALL=C.UTF-8` —— 没有 ANSI 序列、不会被 `less` 挂住、错误消息保持英文可解析；`C.UTF-8` 同时保证 `wc -m` 按**字符**而不是字节数中文。
 - **超时 = 中途晋升**（照 ops 的 `promoted`）：前台命令到 `timeoutMs` 仍在跑时**不杀**，转成宿主后台任务，回执 `kind=promoted` + `jobId` + 已产生的部分输出；之后用 `job_output` 读、`job_kill` 停。没有 `jobs` 服务时才退回「杀整棵树 + `timedOut`」。
 - **执行层（宿主托管）**：spawn/终止升级（PGID + taskkill）/输出预算/spill/管道生命周期全部交给 `ctx.subprocess.spawn`，本工具只负责"选 bash、组织 argv、渲染"；宿主服务缺失时明确报 `EXECUTOR_UNAVAILABLE`，不再有自建 spawn 后备。自测用同契约的本地替身（`test/support/local-subprocess.mjs`）。
+- **后台参数对齐宿主**：`run_in_background`（宿主同名，UI 据此显示后台卡片）；`background` 保留为**别名**。后台运行**不设执行超时**（除非显式给 `timeoutMs`），避免长任务被默认 60 s 杀掉。
 - **terminal 卡片契约**（宿主客户端按原始事件解析）：`description` **必填**（缺了会被当成 persistent shell，卡片消失）；回执**最后一行**固定 `[exit code: N]` 或 `[killed by signal: X]` —— 客户端据此剥离状态头并显示退出码，否则永远显示 0。
 - **逐次升级**（照 ops）：`sandbox_permissions`（`workspace-write`/`danger-full-access`）+ `justification`；只有比当前策略更宽才需要审批，走宿主 `approval.request`，**批准前绝不执行**，批准后复核策略没变（`AUTHORITY_CHANGED` 则作废）；失败码 `APPROVAL_INVALID`/`APPROVAL_UNAVAILABLE`/`APPROVAL_<OUTCOME>`。审批服务不可用时**不降级放行**。
 - **生命周期收尾**：会话/agent 销毁（`session/disposed`/`agent/disposed`）时把还活着的任务 kill 掉 —— promoted 的后台命令不会在会话结束后残留。

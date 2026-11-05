@@ -167,7 +167,7 @@ console.log('== 11. 工具定义形状（宿主注册契约）==')
     const def = seen[0] ?? {}
     ok('名字是 bash', def.name === 'bash')
     ok('参数是字段映射方言（command 与 script_path 二选一，均非必填）', typeof def.parameters?.command?.type === 'string' && def.parameters?.command?.required !== true && typeof def.parameters?.script_path?.type === 'string')
-    ok('参数面 = ops 那套 + background', Object.keys(def.parameters ?? {}).sort().join(',') === 'background,command,cwd,description,graceMs,includeDiagnostics,justification,sandbox_permissions,script_path,timeoutMs,workdir', Object.keys(def.parameters ?? {}).join(','))
+    ok('参数面 = ops 那套 + background', Object.keys(def.parameters ?? {}).sort().join(',') === 'background,command,cwd,description,graceMs,includeDiagnostics,justification,run_in_background,sandbox_permissions,script_path,timeoutMs,workdir', Object.keys(def.parameters ?? {}).join(','))
     ok('有 output.schema 与 render', def.output?.schema !== undefined && typeof def.output?.render === 'function')
     ok('描述里写清了超时/晋升与沙箱边界', /promoted|spooled/.test(def.description) && /sandboxed mode|confined/.test(def.description))
 }
@@ -301,6 +301,8 @@ console.log('== 15. 后台任务（接宿主 jobs 服务）==')
         ok('cancel 后 done 报 killed', done2.status === 'killed', JSON.stringify(done2))
 
         const def3 = tools((tool) => tool, { resolveWorkspaceCwd: () => dir4 })[0]
+        const aliasText = await def2.execute({ command: 'sleep 3', run_in_background: true }, {})
+        ok('run_in_background 别名等价于 background', /kind=background/.test(aliasText) && /jobId=/.test(aliasText), aliasText.slice(0, 90))
         const noJobs = await def3.execute({ command: 'echo x', background: true })
         ok('没有 jobs 服务 ⇒ 明确报错而不是静默', /jobs 服务/.test(noJobs) && /ok=false/.test(noJobs), noJobs)
     }

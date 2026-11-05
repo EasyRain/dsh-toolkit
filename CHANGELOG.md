@@ -34,6 +34,7 @@
   宿主经 `webServer` 注册 `/dsh-toolkit/bash/{status,install}`（`install` 仅 POST + 同源校验）；客户端探测不到 bash 时**禁用该开关**并显示原因/按钮。实现：`lib/shell/{sources,install,routes}.js` + `lib/client.js`。
 - **上游跟踪（同日）**：读到 dsh-ops 的 PR #653（`restrict()` 只能遮全局名，own-scope 注册遮不住）与 #659（外部所有的 workspace 只要已授予 `WRITE_OWNER` 就应放行）—— 前者对应我们的 `host-shell`，已给永久失败加去重（同一 agent 只记一次、不重试）；后者正是本机 `dsh-toolkit` 缺 Low 完整性标签的同类问题（外来所有者），报错与修法见 TOOLKIT。
 - **修复：晋升任务的尾部输出丢失（同日）**：宿主路径靠 80 ms 轮询喂 job 缓冲，进程结束时最后一块没补交（实测 `promote-end` 丢）。结束/晋升时先 `flushChunks()` 再停轮询。
+- **后台参数对齐 + 无超时（同日）**：新增 `run_in_background`（宿主 UI 据此识别后台卡片），`background` 作为别名；后台任务不再套默认 60 s 超时（显式 `timeoutMs` 仍生效）。
 - **执行层交给宿主（同日，#2 收口）**：删除自建 spawn / pgid 文件 / taskkill 兜底（约 200 行），全部交给 `ctx.subprocess.spawn`（终止升级/输出预算/spill/管道由宿主管理）；我们只留 argv 与渲染，自测改用同契约的本地替身。
 - **terminal 卡片契约（同日）**：`description` 改为必填；回执末尾追加 `[exit code: N]`/`[killed by signal: X]`，让宿主客户端把 bash 结果渲染成 terminal 卡片并显示正确退出码（原来缺这行会永远显示 0）。
 - **修复：前台命令在「后台任务」里堆积“已结束”（同日）**：宿主 `jobs.remove(id, caller)` 要求**已终态 + 正确 owner**；原来不带 owner、结算瞬间就调用，异常被吞 ⇒ 37 条残留。改为带 owner、50 ms 重试到终态。历史残留需手动「清空」，之后不再增长。
