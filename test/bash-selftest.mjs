@@ -158,7 +158,7 @@ console.log('== 11. 工具定义形状（宿主注册契约）==')
     const def = seen[0] ?? {}
     ok('名字是 bash', def.name === 'bash')
     ok('参数是字段映射方言（command 与 script_path 二选一，均非必填）', typeof def.parameters?.command?.type === 'string' && def.parameters?.command?.required !== true && typeof def.parameters?.script_path?.type === 'string')
-    ok('参数面 = ops 那套 + background', Object.keys(def.parameters ?? {}).sort().join(',') === 'background,command,cwd,description,graceMs,includeDiagnostics,script_path,timeoutMs,workdir', Object.keys(def.parameters ?? {}).join(','))
+    ok('参数面 = ops 那套 + background', Object.keys(def.parameters ?? {}).sort().join(',') === 'background,command,cwd,description,graceMs,includeDiagnostics,justification,sandbox_permissions,script_path,timeoutMs,workdir', Object.keys(def.parameters ?? {}).join(','))
     ok('有 output.schema 与 render', def.output?.schema !== undefined && typeof def.output?.render === 'function')
     ok('描述里写清了超时/晋升与沙箱边界', /promoted|spooled/.test(def.description) && /sandboxed mode|confined/.test(def.description))
 }
@@ -454,6 +454,70 @@ console.log('== 21. 宿主取消（停止按钮）能真正打断 ==')
     const preRes = await runBash('echo x', { signal: pre.signal })
     ok('进进程前已取消 ⇒ 直接 cancelled', preRes.ok === false && /cancelled/i.test(preRes.error ?? ''))
     ok('工具层取消回执带 [aborted] 与 failure=CANCELLED', /\[aborted\]/.test(text) && /\[failure: CANCELLED;/.test(text), text.slice(-200))
+}
+
+console.log('== 22. 逐次升级审批（sandbox_permissions）==')
+{
+    const { approveEscalation } = await import('../lib/shell/approval.js')
+    const policy = { mode: 'workspace-write', workspaceRoot: 'D:/ws' }
+    const ctx = (approval, mode = () => policy.mode) => ({
+        get: (name) => name === 'sandboxPolicy' ? { resolve: () => ({ ...policy, mode: mode() }) } : name === 'approval' ? approval : undefined,
+    })
+    const exec = { agent: { session: { id: 's' } }, callId: 'c1', signal: { throwIfAborted() {} } }
+    ok('没请求就不升级', (await approveEscalation(ctx({ request: async () => 'denied' }), {}, exec)).mode === 'workspace-write')
+    let seen = null
+    const allowed = await approveEscalation(ctx({ request: async (asked) => { seen = asked; return 'allowed-once' } }), { sandbox_permissions: 'danger-full-access', justification: 'need full' }, exec)
+    ok('批准后按目标模式执行', allowed.mode === 'danger-full-access' && seen?.reason === 'need full' && seen?.toolName === 'bash', JSON.stringify(seen))
+    let failed = ''
+    try { await approveEscalation(ctx({ request: async () => 'denied' }), { sandbox_permissions: 'danger-full-access', justification: 'x' }, exec) } catch (error) { failed = error.message }
+    ok('拒绝 ⇒ APPROVAL_DENIED', /^APPROVAL_DENIED/.test(failed), failed)
+    failed = ''
+    try { await approveEscalation(ctx(undefined), { sandbox_permissions: 'danger-full-access', justification: 'x' }, exec) } catch (error) { failed = error.message }
+    ok('无审批服务 ⇒ APPROVAL_UNAVAILABLE', /^APPROVAL_UNAVAILABLE/.test(failed), failed)
+    failed = ''
+    let modeNow = 'workspace-write'
+    const shifting = { get: (name) => name === 'sandboxPolicy' ? { resolve: () => ({ ...policy, mode: modeNow }) } : name === 'approval' ? { request: async () => { modeNow = 'danger-full-access'; return 'allowed-once' } } : undefined }
+    try { await approveEscalation(shifting, { sandbox_permissions: 'danger-full-access', justification: 'x' }, exec) } catch (error) { failed = error.message }
+    ok('审批期间策略变化 ⇒ AUTHORITY_CHANGED', /^AUTHORITY_CHANGED/.test(failed), failed)
+    failed = ''
+    try { await approveEscalation(ctx({ request: async () => 'allowed-once' }), { sandbox_permissions: 'workspace-write' }, exec) } catch (error) { failed = error.message }
+    ok('缺 justification ⇒ APPROVAL_INVALID', /^APPROVAL_INVALID/.test(failed), failed)
+
+    const dir8 = mkdtempSync(join(tmpdir(), 'tk bash escalate-'))
+    try {
+        let asked = null
+        const live = { mode: 'workspace-write', workspaceRoot: dir8 }
+        const c2 = { get: (name) => name === 'sandboxPolicy' ? { resolve: () => live } : name === 'approval' ? { request: async (a) => { asked = a; return 'allowed-once' } } : undefined }
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dir8, getCtx: () => c2, sandboxPlatform: 'win32' })[0]
+        const escalated = await def.execute({ command: 'echo escalated-ok', sandbox_permissions: 'danger-full-access', justification: 'test' }, { agent: { session: { id: 's' } }, callId: 'c1' })
+        ok('升级后命令真的执行（未受限）', /ok=true/.test(escalated) && /escalated-ok/.test(escalated) && asked !== null, escalated.slice(0, 160))
+        const deniedCtx = { get: (name) => name === 'sandboxPolicy' ? { resolve: () => live } : name === 'approval' ? { request: async () => 'denied' } : undefined }
+        const defDenied = tools((tool) => tool, { resolveWorkspaceCwd: () => dir8, getCtx: () => deniedCtx, sandboxPlatform: 'win32' })[0]
+        const denied = await defDenied.execute({ command: 'echo should-not-run', sandbox_permissions: 'danger-full-access', justification: 'test' }, { agent: { session: { id: 's' } }, callId: 'c2' })
+        ok('拒绝时命令不执行且带 failure=APPROVAL_DENIED', /\[failure: APPROVAL_DENIED;/.test(denied) && !/should-not-run/.test(denied), denied.slice(-200))
+    }
+    finally { rmSync(dir8, { recursive: true, force: true }) }
+}
+
+console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
+{
+    const dir9 = mkdtempSync(join(tmpdir(), 'tk bash dispose-'))
+    try {
+        let captured = null
+        const jobs = { start(options) { captured = options; return 'job-live' }, remove() {} }
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dir9, getJobs: () => jobs })[0]
+        await def.execute({ command: 'sleep 5', background: true }, { agent: { id: 'a1', session: { id: 's1' } } })
+        const run = captured.run()
+        const bashModule = await import('../lib/shell/bash.js')
+        bashModule.disposeLiveJobs({ sessionId: 's1' })
+        const done = await run.done
+        ok('会话销毁 ⇒ 活任务被取消', done.status === 'killed' || done.status === 'failed', JSON.stringify(done))
+        const handlers = {}
+        const off = bashModule.mountJobCleanup({ on(event, handler) { handlers[event] = handler; return () => {} } })
+        ok('挂上 agent/session 销毁事件', typeof handlers['agent/disposed'] === 'function' && typeof handlers['session/disposed'] === 'function')
+        off()
+    }
+    finally { rmSync(dir9, { recursive: true, force: true }) }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
