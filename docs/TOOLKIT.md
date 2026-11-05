@@ -34,7 +34,7 @@
 
 ## file
 
-`file` —— 一个工具八个动作：`read` / `stat` / `write` / `edit` / `copy` / `move` / `remove` / `mkdir`（不传 `action` 时按 `read`）。
+`file` —— 一个工具九个动作：`read` / `stat` / `write` / `edit` / `replace` / `copy` / `move` / `remove` / `mkdir`（不传 `action` 时按 `read`）。
 
 - **read**：多文件（`path` / `paths`，最多 20）+ 每文件多区间（`ranges: ["1-40","120"]`，1 基含两端）。编码自动探测：**BOM → 严格 UTF-8 → 严格 GB18030**，并回报依据；都失败就明确报"有 N 个 U+FFFD"。二进制（前 8 KB 有 NUL）给 **hex 预览**而不是乱码。OOXML 直接提取文本：`.docx` 按段落、`.xlsx` 按工作表/行（`A1=值`）、`.pptx` 按页（`<a:t>`），`encoding` 分别回 `docx`/`xlsx`/`pptx`，`ranges` 按提取后的行算；**都不做完整渲染**（样式/表格合并/图片/公式计算不处理，上限 5 表 / 500 行 / 100 页）。`.pdf` 明确拒绝并指向 `office` 技能。
 - **读取回执（照抄 ops 的续读协议，实测好用）**：每次 read 都回 **`revision`**（整文件 sha256，可直接拿去做 `edit` 的 CAS，不必再读一遍）；
