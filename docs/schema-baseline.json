@@ -78,8 +78,8 @@
     {
       "name": "bash",
       "family": "shell",
-      "bytes": 2139,
-      "approximateTokens": 535
+      "bytes": 2343,
+      "approximateTokens": 586
     },
     {
       "name": "table_diff",
@@ -127,8 +127,8 @@
     },
     "shell": {
       "tools": 1,
-      "bytes": 2139,
-      "approximateTokens": 535
+      "bytes": 2343,
+      "approximateTokens": 586
     },
     "table": {
       "tools": 2,
@@ -138,14 +138,14 @@
   },
   "total": {
     "tools": 15,
-    "bytes": 34870,
-    "approximateTokens": 8718
+    "bytes": 35074,
+    "approximateTokens": 8769
   },
   "resident": {
-    "toolSchemas": 34870,
+    "toolSchemas": 35074,
     "routingSection": 649,
-    "bytes": 35519,
-    "approximateTokens": 8880
+    "bytes": 35723,
+    "approximateTokens": 8931
   },
   "routingSection": {
     "bytes": 649,
@@ -154,6 +154,6 @@
   },
   "onDemand": {
     "path": "docs/TOOLKIT.md",
-    "bytes": 61078
+    "bytes": 61627
   }
 }

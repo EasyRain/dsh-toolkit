@@ -32,6 +32,8 @@
 - 文档：`docs/TOOLKIT.md` 新增 `## shell`（含四条限制：非交互/无 PTY/MSYS 根映射/路径转换）；README ×2、locale ×2、设置页文案同步为"六族 14 个工具 / 6 个开关"。
 - **一键安装 + 开关自锁**：设置页「Bash 执行器」行右侧给**两个安装按钮**（国内镜像 npmmirror / GitHub 官方，**不做代理探测**，用户自己选）；装的是**用户级 PortableGit**（`%LOCALAPPDATA%\dsh-toolkit\git`，`PortableGit-*.7z.exe -y -o<dir>` 静默解压，实测 60 MB / 2.7 s 下载 + 11.7 s 解压），装完删安装包并**重新探测**（不信退出码）。
   宿主经 `webServer` 注册 `/dsh-toolkit/bash/{status,install}`（`install` 仅 POST + 同源校验）；客户端探测不到 bash 时**禁用该开关**并显示原因/按钮。实现：`lib/shell/{sources,install,routes}.js` + `lib/client.js`。
+- **沙箱闸门（同日）**：非 `danger-full-access` 会话现在必须过宿主 `sandboxPolicy.resolve` + `sandbox.confine`，用受限 argv 执行；拿不到 confinement 或结果无效 ⇒ **拒绝执行**（`SANDBOX_UNAVAILABLE`，命令未跑）。
+  退出码非 0 且命中 `denialSignatures` ⇒ 回执标 `[sandbox: file access denied under <mode> mode]`。此前直接 `child_process` 起进程，在受限会话里等于绕过沙箱。
 - **后台任务（同日）**：`background:true` 时把命令交给宿主 `jobs` 服务（`kind:'bash'`、label、owner、stdout/stderr 读取器），立即返回 `jobId`，由宿主 `job_output`/`job_kill` 接管；无 `jobs` 服务时明确报错。
   `runBash` 顺带支持 `signal` 取消与 `onChunk` 流回调（取消走与超时相同的两路杀进程树）。
 - **参数面对齐 ops_bash（同日）**：补 `script_path`（跑现成 `.sh`，与 `command` 二选一）、`workdir`（`cwd` 别名）、`description`、`graceMs`、`includeDiagnostics`；

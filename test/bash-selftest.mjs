@@ -10,7 +10,7 @@
  * 跑法：node test/bash-selftest.mjs
  */
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -287,6 +287,43 @@ console.log('== 15. 后台任务（接宿主 jobs 服务）==')
     }
     finally {
         rmSync(dir4, { recursive: true, force: true })
+    }
+}
+
+console.log('== 16. 沙箱闸门（非完全权限必须真受限，否则拒绝执行）==')
+{
+    const bashPath = findBash()
+    const dir5 = mkdtempSync(join(tmpdir(), 'tk bash sandbox-'))
+    try {
+        const makeCtx = (mode, sandbox) => ({ get: (name) => (name === 'sandboxPolicy' ? { resolve: () => ({ mode }) } : (name === 'sandbox' ? sandbox : undefined)) })
+        const define = (ctx) => tools((tool) => tool, { resolveWorkspaceCwd: () => dir5, getCtx: () => ctx })[0]
+
+        const dangerCalls = []
+        const danger = define(makeCtx('danger-full-access', { confine: async (argv) => { dangerCalls.push(argv); return { argv, enforcement: 'full' } } }))
+        const dangerOut = await danger.execute({ command: 'echo free-ok' }, { agent: { session: {} } })
+        ok('danger-full-access 不调用 confine', dangerCalls.length === 0 && /free-ok/.test(dangerOut), dangerOut.slice(0, 120))
+
+        const confined = define(makeCtx('workspace-write', {
+            confine: async () => ({ argv: [bashPath, '-c', 'echo confined-ok'], enforcement: 'full', denialSignatures: ['blocked by sandbox'] }),
+        }))
+        const confinedOut = await confined.execute({ command: 'echo original-should-not-run' }, { agent: { session: {} } })
+        ok('受限模式用 confinement 的 argv 执行', /confined-ok/.test(confinedOut) && !/original-should-not-run/.test(confinedOut), confinedOut.slice(0, 160))
+        ok('回执标出沙箱模式/强度', /\[sandbox: workspace-write \/ full\]/.test(confinedOut), confinedOut.slice(0, 160))
+
+        const denied = define(makeCtx('workspace-write', {
+            confine: async () => ({ argv: [bashPath, '-c', 'echo "blocked by sandbox" >&2; exit 1'], enforcement: 'partial', denialSignatures: ['blocked by sandbox'] }),
+        }))
+        const deniedOut = await denied.execute({ command: 'touch nope' }, { agent: { session: {} } })
+        ok('沙箱拒绝 ⇒ 明确标 denied', /\[sandbox: file access denied under workspace-write mode\]/.test(deniedOut), deniedOut.slice(0, 200))
+
+        const closed = define(makeCtx('workspace-write', {}))
+        const closedOut = await closed.execute({ command: 'touch touched.txt' }, { agent: { session: {} } })
+        ok('拿不到 confinement ⇒ 拒绝执行', /ok=false/.test(closedOut) && /SANDBOX_UNAVAILABLE/.test(closedOut), closedOut.slice(0, 200))
+        ok('拒绝时命令确实没跑（没有副作用）', !existsSync(join(dir5, 'touched.txt')))
+        ok('回执标出 unavailable', /\[sandbox: unavailable/.test(closedOut), closedOut.slice(0, 200))
+    }
+    finally {
+        rmSync(dir5, { recursive: true, force: true })
     }
 }
 
