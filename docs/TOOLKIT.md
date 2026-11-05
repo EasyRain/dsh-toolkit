@@ -29,6 +29,7 @@
 - **输出**：默认上限 2 MB，超出置 `truncated:true`；stdout/stderr 原样回显，不做转义，`ok` 只在退出码 0 且未超时时为真。
 - **找不到 bash** ⇒ 明确报错并提示装 Git for Windows；**绝不**自动下载。
 - **没装 bash 时**：设置 → 工具集里「Bash 执行器」那行会给两个按钮 —— **从国内镜像安装**（npmmirror，直连，实测 60 MB / 2.7 s）、**从 GitHub 安装**（需要你自己能连 GitHub）。装的是**用户级 PortableGit**（`%LOCALAPPDATA%\dsh-toolkit\git`）：不需要管理员、不改系统 Git、装完删掉 60 MB 安装包；**没装好之前这个开关是禁用的**（工具仍注册，调用会返回明确错误，而不是静默失败）。
+- **隐藏宿主 pwsh**（照 ops 的 "shell replacement"）：Windows 上开启本族、且 `findBash()` 找到 bash 时，按会话 `tools.restrict({ deny: ['pwsh','pwsh_persistent'] })` 把宿主自带的 PowerShell 工具藏起来 —— 只隐藏不卸载，会话销毁/插件卸载自动还原；**bash 不可用时不隐藏**（否则会话没有任何 shell）。POSIX 本来就只有 bash，不动。
 - **已知限制**：无 PTY（`top`、进度条会乱）；Git 安装目录就是 MSYS 的 `/`（所以在 `C:\Program Files\Git` 里 `pwd` 输出 `/` 是**正确**的）；传给 Windows exe 的 `/xxx` 会被 MSYS 转换，必要时设 `MSYS_NO_PATHCONV=1`。
 - **长脚本别硬塞进 `command`**：先用 `write` 落成 `.sh`，再 `bash path/to/script.sh` —— 少一层引号解析，中文/反斜杠/heredoc 都更稳。
 

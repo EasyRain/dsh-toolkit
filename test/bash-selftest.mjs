@@ -172,5 +172,44 @@ console.log('== 12. 文本投影 ==')
     ok('默认上限是 2 MB', DEFAULTS.maxOutputBytes === 2 * 1024 * 1024)
 }
 
+console.log('== 13. 隐藏宿主 pwsh（Windows，省常驻 schema）==')
+{
+    const { mountHostShellHiding, HOST_SHELL_NAMES } = await import('../lib/shell/host-shell.js')
+    ok('只隐藏 pwsh / pwsh_persistent 两个名字', HOST_SHELL_NAMES.join(',') === 'pwsh,pwsh_persistent', HOST_SHELL_NAMES.join(','))
+
+    const posix = mountHostShellHiding({ inject: () => { throw new Error('不该走到这里') } }, () => {}, 'linux')
+    ok('POSIX 不隐藏任何东西', posix.mounted === false && posix.reason === 'posix')
+
+    const calls = []
+    const disposed = []
+    const handlers = {}
+    let cleanup = null
+    const toolsFor = (agent) => ({
+        get: (name) => (HOST_SHELL_NAMES.includes(name) ? { name } : undefined),
+        restrict: (options) => { calls.push({ agent, options }); return () => disposed.push(agent) },
+    })
+    const makeAgent = (name) => ({ name, ctx: { get: (service) => (service === 'tools' ? toolsFor(name) : undefined) } })
+    const first = makeAgent('a1')
+    const scope = {
+        get: (service) => (service === 'agents' ? { list: () => [first] } : (service === 'tools' ? toolsFor('root') : undefined)),
+        on: (event, handler) => { handlers[event] = handler },
+        effect: (fn) => { cleanup = fn() },
+    }
+    const ctx = { inject: (deps, callback) => { ok('注入的是 tools', Array.isArray(deps) && deps.includes('tools')); callback(scope) } }
+    const logs = []
+    const mounted = mountHostShellHiding(ctx, (line) => logs.push(line), 'win32')
+    ok('挂载成功', mounted.mounted === true, JSON.stringify(mounted))
+    ok('已有会话立刻被隐藏（deny 两个名字）', calls.length === 1 && calls[0].agent === 'a1' && calls[0].options.deny.join(',') === 'pwsh,pwsh_persistent', JSON.stringify(calls))
+
+    const second = makeAgent('a2')
+    handlers['agent/created']?.({ agent: second })
+    ok('新会话创建时也隐藏', calls.length === 2 && calls[1].agent === 'a2', JSON.stringify(calls.map((call) => call.agent)))
+    handlers['agent/disposed']?.({ agent: second })
+    ok('会话销毁时还原', disposed.includes('a2'), disposed.join(','))
+    cleanup?.()
+    ok('插件卸载时把剩下的都还原', disposed.includes('a1'), disposed.join(','))
+    ok('日志里有动作记录', logs.some((line) => /hidden/.test(line)), logs.join(' | '))
+}
+
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
 process.exitCode = failures === 0 ? 0 : 1
