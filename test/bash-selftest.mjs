@@ -10,7 +10,7 @@
  * 跑法：node test/bash-selftest.mjs
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -160,7 +160,7 @@ console.log('== 11. 工具定义形状（宿主注册契约）==')
     ok('参数是字段映射方言（command 与 script_path 二选一，均非必填）', typeof def.parameters?.command?.type === 'string' && def.parameters?.command?.required !== true && typeof def.parameters?.script_path?.type === 'string')
     ok('参数面 = ops 那套 + background', Object.keys(def.parameters ?? {}).sort().join(',') === 'background,command,cwd,description,graceMs,includeDiagnostics,script_path,timeoutMs,workdir', Object.keys(def.parameters ?? {}).join(','))
     ok('有 output.schema 与 render', def.output?.schema !== undefined && typeof def.output?.render === 'function')
-    ok('描述里写清了非交互与超时', /Non-interactive/.test(def.description) && /timeout/i.test(def.description))
+    ok('描述里写清了超时/晋升与沙箱边界', /promoted|spooled/.test(def.description) && /sandboxed mode|confined/.test(def.description))
 }
 
 console.log('== 12. 文本投影 ==')
@@ -398,6 +398,30 @@ console.log('== 19. 中途晋升为后台（ops 的 promoted 语义）==')
     finally {
         rmSync(dir6, { recursive: true, force: true })
     }
+}
+
+console.log('== 20. spill 上限 + 结构化失败 ==')
+{
+    const dir7 = mkdtempSync(join(tmpdir(), 'tk bash spill-'))
+    try {
+        const big = await runBash('seq 1 200000', { maxOutputBytes: 1024, maxSpillBytes: 2048 })
+        ok('spill 到上限停止并标记', big.truncated === true && big.spillTruncated === true, JSON.stringify({ truncated: big.truncated, spillTruncated: big.spillTruncated }))
+        if (typeof big.spillPath === 'string') {
+            const size = statSync(big.spillPath).size
+            ok('spill 文件不超过上限（+头部）', size <= 2048 + 128, String(size))
+            rmSync(big.spillPath, { force: true })
+        }
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dir7 })[0]
+        const timed = await def.execute({ command: 'sleep 5', timeoutMs: 300 })
+        ok('超时失败带 failure=TIMEOUT', /\[failure: TIMEOUT; effects: unknown; retry: after-input-change\]/.test(timed), timed.slice(-200))
+        const exit1 = await def.execute({ command: 'exit 3' })
+        ok('非零退出带 failure=EXIT_NONZERO', /\[failure: EXIT_NONZERO; effects: unknown; retry: never\]/.test(exit1), exit1.slice(-160))
+        const ctx = { get: (name) => (name === 'sandboxPolicy' ? { resolve: () => ({ mode: 'workspace-write' }) } : undefined) }
+        const closed = tools((tool) => tool, { resolveWorkspaceCwd: () => dir7, getCtx: () => ctx, sandboxPlatform: 'win32' })[0]
+        const blocked = await closed.execute({ command: 'echo x' })
+        ok('受限模式缺运行时带 failure=EXECUTOR_UNAVAILABLE', /\[failure: EXECUTOR_UNAVAILABLE; effects: none; retry: after-config-change\]/.test(blocked), blocked.slice(-220))
+    }
+    finally { rmSync(dir7, { recursive: true, force: true }) }
 }
 
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)

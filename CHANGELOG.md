@@ -33,6 +33,7 @@
 - **一键安装 + 开关自锁**：设置页「Bash 执行器」行右侧给**两个安装按钮**（国内镜像 npmmirror / GitHub 官方，**不做代理探测**，用户自己选）；装的是**用户级 PortableGit**（`%LOCALAPPDATA%\dsh-toolkit\git`，`PortableGit-*.7z.exe -y -o<dir>` 静默解压，实测 60 MB / 2.7 s 下载 + 11.7 s 解压），装完删安装包并**重新探测**（不信退出码）。
   宿主经 `webServer` 注册 `/dsh-toolkit/bash/{status,install}`（`install` 仅 POST + 同源校验）；客户端探测不到 bash 时**禁用该开关**并显示原因/按钮。实现：`lib/shell/{sources,install,routes}.js` + `lib/client.js`。
 - **上游跟踪（同日）**：读到 dsh-ops 的 PR #653（`restrict()` 只能遮全局名，own-scope 注册遮不住）与 #659（外部所有的 workspace 只要已授予 `WRITE_OWNER` 就应放行）—— 前者对应我们的 `host-shell`，已给永久失败加去重（同一 agent 只记一次、不重试）；后者正是本机 `dsh-toolkit` 缺 Low 完整性标签的同类问题（外来所有者），报错与修法见 TOOLKIT。
+- **bash schema 压缩 + spill 上限 + 失败契约（同日）**：描述与参数说明瘦身，`bash` 2,580 → **1,604 B（-38%）**，全量 35,311 → **34,335 B（-976 B）**；spill 封顶 64 MB（`spillTruncated`）；失败追加 `failure{code,effectState,retry,nextAction}` 与 `[aborted]`。
 - **中途晋升为后台（同日，照 ops 的 promoted）**：前台命令到 `timeoutMs` 仍未结束时**不杀**，改为转成宿主后台任务并回 `kind=promoted` + `jobId` + 已产生的部分输出；长任务不必取消重跑。无 `jobs` 服务时维持原行为（杀树 + `timedOut`）。
 - **环境净化（同日，照 ops）**：子进程固定 `NO_COLOR`/`TERM=dumb`/`PAGER=cat`/`GIT_PAGER=cat`/`LC_MESSAGES=C`，`LC_ALL=C.UTF-8`；无 ANSI、不会被分页器挂住，中文仍按字符计数。
 - **平台收口修正（同日）**：POSIX 上不再「注册后让位」，而是把 `shell` 族**直接判为不可用**（`familyEnabled` 返回 false），设置页开关禁用并提示「宿主自带 bash 接管」。Linux 上不需要本插件插一脚。
