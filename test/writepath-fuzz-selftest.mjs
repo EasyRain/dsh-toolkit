@@ -171,7 +171,7 @@ else {
     {
         const p = mk('a4-bom.js', 'const a = 1\nconst b = 2\n', true, true)
         const preview = await edit.execute({ ops: [{ pat: 'const $N = $V', out: 'let $N = $V' }], paths: [p], action: 'preview' }, exec)
-        const staged = String(preview).match(/stagedId[=: ]+([A-Za-z0-9_-]+)/)?.[1] ?? undefined
+        const staged = preview?.stagedId
         let applyError = ''
         try {
             if (staged === undefined) throw new Error('preview 未返回 stagedId')
