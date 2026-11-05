@@ -28,6 +28,10 @@
 #     等 ubuntu 连续几轮全绿，把它的 experimental 去掉就是正式加门。
 name: ci
 
+# 2026-11-05：ubuntu 已**转正**（不再 experimental）。
+# 此前 ubuntu 一直是红：根因是 bash 自测的 POSIX 分支写错了（`ls -d "$1"` 没传参），
+# 不是环境问题；修好后 Windows/Ubuntu × Node 22/24 四个 job 全绿。
+
 on:
   push:
   pull_request:
@@ -41,8 +45,8 @@ jobs:
         include:
           - { os: windows-latest, node: '22.x', experimental: false }
           - { os: windows-latest, node: '24.x', experimental: false }
-          - { os: ubuntu-latest, node: '22.x', experimental: true }
-          - { os: ubuntu-latest, node: '24.x', experimental: true }
+          - { os: ubuntu-latest, node: '22.x', experimental: false }
+          - { os: ubuntu-latest, node: '24.x', experimental: false }
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.experimental }}
     name: ${{ matrix.os }} · node ${{ matrix.node }}${{ matrix.experimental && ' (观测，不挡合并)' || '' }}
