@@ -4,6 +4,29 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.4.0 — 2026-11-06（shell 族 + `file diff` + 严格 provider 修复）
+
+**🧩 新增 `shell` 族：`bash`（Windows 专用；`ops_bash` 的替代）**
+- 执行交给宿主 `ctx.subprocess`：spawn / 终止升级（PGID + taskkill）/ 输出预算 / spill / 管道生命周期全由宿主管理，本插件只负责选 bash、组织 argv 与渲染；自建 spawn / pgid 文件 / taskkill 兜底已删除。
+- 尊重 `sandboxPolicy` + `sandbox.confine`；新增 `sandbox_permissions` + `justification` 逐次升级：走宿主 `approval.request`，**批准前不执行**、批后复核（`AUTHORITY_CHANGED` 则作废）；审批不可用时不降级放行。
+- 超时晋升为后台 `promoted`（不杀、不重跑）；前台命令登记为宿主 job（可单条停止，正常结束自动移除）；`run_in_background`（与宿主同名，`background` 为别名）**无默认执行超时**。
+- 取消接宿主 `exec.signal`（点停止/结束会话 ⇒ 两路杀树 + 主动关管道）；子进程固定 `GIT_TERMINAL_PROMPT=0` / `GCM_INTERACTIVE=never`，凭据过期会快速失败而不是挂住。
+- 结果按宿主 terminal 卡片契约输出：`description` 必填、末行 `[exit code: N]` 或 `[killed by signal: SIGx]`；Windows 的 `signal<<8`（SIGTERM=3840 等）还原为信号名；`session/disposed` / `agent/disposed` 时收尾活任务。
+
+**🧩 `file` 新增 `diff` 动作**
+- `path` + `content` ⇒ 只读预览：公共前后缀按行修剪的**单个替换 hunk**，`offset`/`limit`/`context` 分页，old/new sha256 与行数；BOM / CRLF / 尾换行差异单独指出；永不写盘。
+- `edit` / `write` 带 `dryRun:true` 现在**明确拒绝**（此前会静默写盘），预览统一走 `diff`。
+
+**修复**
+- 严格 provider（中转站 / new-api）因属性级布尔 `required: true` 拒绝整个请求（`true is not of type "array"`）：`toJsonSchema` 递归归一 + 回归断言（15 个工具的 parameters/output 里 `required` 必须是字符串数组）。
+- 晋升任务的尾部输出丢失（进程结束前最后一块没有 flush）。
+- 前台 job 在「后台任务」列表堆积「已结束」（`jobs.remove` 要求 owner + 终态，改为带 owner 重试）。
+- Windows 信号退出码（`signal<<8`）显示为 3840 等数字，现还原为信号名。
+- `ast_edit` / `file` 输出 schema 里的嵌套布尔 `required` 一并清洗。
+
+**成本**
+- 全量 schema **35,350 B**（`shell` 2,116 B、`file` 4,475 B）；常驻 **35,999 B ≈ 9,000 tok**；36 份自测 **1,516 条断言**。
+
 ## 0.3.0 — 2026-10-10（自研化：diff 引擎 + AST 改写引擎）
 
 **🧩 新增 `file` 族：`file` 一个工具八个动作（2026-11-05，dsh-ops 文件族的替代）**
