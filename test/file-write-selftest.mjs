@@ -119,6 +119,10 @@ try {
         ok('工具级 replace 默认预览并列出命中文件', /dryRun=true/.test(text) && /a\.txt: 3 处/.test(text), text)
         const written = await tool.execute({ action: 'replace', paths: [repl], pattern: 'FOO', replacement: 'X', dryRun: false })
         ok('工具级 dryRun:false 写盘', /已写入/.test(written) && readFileSync(a, 'utf8') === 'X bar X\nbaz X\n', written)
+        let dryGuard = ''
+        try { await tool.execute({ action: 'edit', path: a, edits: [{ oldText: 'X', newText: 'Y' }], dryRun: true }) }
+        catch (error) { dryGuard = error instanceof Error ? error.message : String(error) }
+        ok('edit + dryRun 被拒（不再静默写盘）', /dryRun 只适用于/.test(dryGuard) && readFileSync(a, 'utf8').includes('X bar X'), dryGuard)
     }
 
     console.log('== 5. effectState（失败时区分"没生效 / 已生效 / 不确定"）==')
