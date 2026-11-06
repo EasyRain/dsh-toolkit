@@ -52,6 +52,26 @@ await entry.apply(ctx, {})
 const expectedRegistered = process.platform === 'win32' ? 15 : 14
 ok(`注册出 ${expectedRegistered} 个工具（POSIX 上 bash 让位给宿主；checkpoint 7→1、download 3→1、帮助 2→1、session 成对 6→4）`, registered.length === expectedRegistered, `${registered.length} 个`)
 
+// --- ⓪ 严格 provider 契约：任何层级的 required 都必须是数组 -----------------
+/** 递归找布尔/字符串的 required（严格 provider 会回 `true is not of type "array"`）。 */
+function lintRequired(node, where, out) {
+    if (node === null || typeof node !== 'object') return
+    if (Array.isArray(node)) { node.forEach((value, index) => lintRequired(value, `${where}[${index}]`, out)); return }
+    for (const [key, value] of Object.entries(node)) {
+        if (key === 'required') {
+            if (!Array.isArray(value) || value.some((name) => typeof name !== 'string')) out.push(`${where}.required = ${JSON.stringify(value)}`)
+            continue
+        }
+        lintRequired(value, `${where}.${key}`, out)
+    }
+}
+const requiredDrift = []
+for (const tool of registered) {
+    lintRequired(tool.parameters, `${tool.name}.parameters`, requiredDrift)
+    lintRequired(tool.output?.schema, `${tool.name}.output`, requiredDrift)
+}
+ok('任何层级的 required 都是字符串数组（严格 provider 契约）', requiredDrift.length === 0, requiredDrift.slice(0, 5).join('；'))
+
 // --- ① 静态 lint ------------------------------------------------------------
 /** 递归找"additionalProperties:false 但没 properties"的 object schema（宿主会拒收这类返回值） */
 function lintSchema(schema, where, out) {

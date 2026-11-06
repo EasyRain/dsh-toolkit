@@ -6,8 +6,8 @@
     {
       "name": "ast_edit",
       "family": "ast",
-      "bytes": 4485,
-      "approximateTokens": 1122
+      "bytes": 4482,
+      "approximateTokens": 1121
     },
     {
       "name": "ast_search",
@@ -42,8 +42,8 @@
     {
       "name": "file",
       "family": "file",
-      "bytes": 4479,
-      "approximateTokens": 1120
+      "bytes": 4475,
+      "approximateTokens": 1119
     },
     {
       "name": "toolkit_help",
@@ -97,8 +97,8 @@
   "families": {
     "ast": {
       "tools": 4,
-      "bytes": 8531,
-      "approximateTokens": 2133
+      "bytes": 8528,
+      "approximateTokens": 2132
     },
     "checkpoint": {
       "tools": 1,
@@ -112,8 +112,8 @@
     },
     "file": {
       "tools": 1,
-      "bytes": 4479,
-      "approximateTokens": 1120
+      "bytes": 4475,
+      "approximateTokens": 1119
     },
     "help": {
       "tools": 1,
@@ -138,14 +138,14 @@
   },
   "total": {
     "tools": 15,
-    "bytes": 35357,
-    "approximateTokens": 8840
+    "bytes": 35350,
+    "approximateTokens": 8838
   },
   "resident": {
-    "toolSchemas": 35357,
+    "toolSchemas": 35350,
     "routingSection": 649,
-    "bytes": 36006,
-    "approximateTokens": 9002
+    "bytes": 35999,
+    "approximateTokens": 9000
   },
   "routingSection": {
     "bytes": 649,
