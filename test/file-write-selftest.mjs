@@ -125,6 +125,20 @@ try {
         ok('edit + dryRun 被拒（不再静默写盘）', /dryRun 只适用于/.test(dryGuard) && readFileSync(a, 'utf8').includes('X bar X'), dryGuard)
     }
 
+    console.log('== 换行无关匹配（read 展示 \n，文件可能是 CRLF/CR）==')
+    {
+        const crlf = join(dir, 'crlf-edit.txt')
+        writeFileSync(crlf, 'a\r\nb\r\nc\r\n')
+        const edited = editFileOp({ path: crlf, edits: [{ oldText: 'a\nb', newText: 'A\nB' }] })
+        const raw = readFileSync(crlf, 'utf8')
+        ok('CRLF 文件用 LF oldText 也能命中', edited.ok === true, JSON.stringify(edited))
+        ok('写回保持 CRLF', raw === 'A\r\nB\r\nc\r\n', JSON.stringify(raw))
+        const crOnly = join(dir, 'cr-only-edit.txt')
+        writeFileSync(crOnly, 'a\rb\rc')
+        const crEdited = editFileOp({ path: crOnly, edits: [{ oldText: 'b', newText: 'B' }] })
+        ok('CR-only 文件按 CR 风格写回', crEdited.ok === true && readFileSync(crOnly, 'utf8') === 'a\rB\rc', JSON.stringify(readFileSync(crOnly, 'utf8')))
+    }
+
     console.log('== 5. effectState（失败时区分"没生效 / 已生效 / 不确定"）==')
     {
         const text = renderOpResult({ ok: false, action: 'write', path: 'x', message: 'CAS 失败' })

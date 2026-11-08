@@ -4,6 +4,11 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.4.2 — 2026-11-09（edit 换行无关匹配）
+
+- **`file` 的 `edit` 现在换行无关**：匹配前把文件和 `oldText` 都归一到 LF（CRLF / 孤立 CR 都算换行），命中后按映射回原文件偏移，`newText` 再按文件**主 EOL** 写回。解决了“`read` 展示的是归一化后的行，模型照着写的 `oldText` 却因文件是 CRLF 而匹配不上”的报错（`oldText 在文件里找不到`）。
+- 新增回归：CRLF 文件用 LF `oldText` 命中且写回仍是 CRLF；CR-only 文件按 CR 风格写回。
+
 ## 0.4.1 — 2026-11-09（换行语义修正）
 
 - **`file` 的 `read` / `diff` 现在把孤立 `CR`（旧 Mac 换行）也当换行**：以前只按 `\r\n` / `\n` 切，CR-only 文件会被显示成一行、内容里的 `\r` 被转义成 `\u000d`，看起来就像“read 的换行和实际文件不一致”。现在与编辑器一致（CRLF / LF / 孤立 CR 都算换行），并补了 CR-only 与混合换行的回归断言。

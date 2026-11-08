@@ -66,7 +66,7 @@
 - **diff**：`path` + `content`（拟写入的完整内容）⇒ **只读预览**：按行做公共前缀/后缀修剪，只输出**一个替换 hunk**（不做最小 diff）；带 old/new sha256 与行数，`offset`/`limit`/`context` 分页（默认 100 行 / 3 行上下文）；BOM、CRLF、尾换行差异会单独指出；**永不写盘**。与 `table_diff`（两表按键比对）和 `ast_edit` 的 staged 预览不是一回事。
 - **write**：整文件写 UTF-8（`bom:true` 加 BOM）；**原子写**（同目录临时文件 + rename）。
 - **schema 契约（严格 provider）**：`required` 在任何层级都必须是**字符串数组**；`toJsonSchema` 会递归把属性里的布尔 `required: true` 上提到所属对象并删除，绝不泄露给 provider（否则中转站/new-api 会回 `Invalid schema for function 'file': true is not of type "array"`，整个会话 INVALID_REQUEST）。
-- **edit**：若干 `{oldText,newText}`，**每段必须唯一命中、且互不重叠**，否则整单失败（不做部分应用）；按原编码写回、保留 BOM 与 CRLF。**GB18030 无法编码 ⇒ 明确拒绝**（先转 UTF-8，别悄悄改编码）。`dryRun` 只对 `replace`/`remove` 生效；`edit`/`write` 带 `dryRun:true` 会**明确拒绝**（之前会静默写盘）—— 预览改走 `action:"diff"`。
+- **edit**：若干 `{oldText,newText}`，**每段必须唯一命中、且互不重叠**，否则整单失败（不做部分应用）；**换行无关匹配**：文件与 `oldText` 先归一到 LF（CRLF / 孤立 CR 都算换行），命中后 `newText` 按文件主 EOL 写回；按原编码写回、保留 BOM。**GB18030 无法编码 ⇒ 明确拒绝**（先转 UTF-8，别悄悄改编码）。`dryRun` 只对 `replace`/`remove` 生效；`edit`/`write` 带 `dryRun:true` 会**明确拒绝**（之前会静默写盘）—— 预览改走 `action:"diff"`。
 - **replace**：`pattern`（**字面**文本，不是正则）+ `replacement`，对 `path` / `paths`（文件 / 目录 / glob）批量替换；**默认只预览**（`dryRun:true`，报每个文件几处、在哪几行），要真写必须 `dryRun:false`。二进制跳过；GB18030 文件命中会拒绝（先转 UTF-8）；一次最多扫 50 个文件。
 - **CAS**：`expectedRevision` 传上次回执里的 sha256，或 `"absent"` 表示"只新建" ⇒ 防"读到旧内容再覆盖"。冲突时回执带**当前** revision，照着重读再改。
 - **copy / move**：`to` 与 `path` 同一基准；默认不覆盖（`overwrite:true` 才覆盖）；move 跨卷失败会退化成"复制 + 删源"并在回执里说明。
