@@ -225,6 +225,17 @@ try {
         ok('pptx 按页提取 <a:t> 文本', pptxRead.ok === true && pptxRead.encoding === 'pptx'
             && pptxTextAll.includes('[slide 1]') && pptxTextAll.includes('标题一') && pptxTextAll.includes('第二行'), pptxTextAll)
     }
+
+    console.log('== 换行语义（CRLF / LF / 孤立 CR）==')
+    {
+        const writeNl = (name, text) => { const p = join(dir, name); writeFileSync(p, text, 'utf8'); return p }
+        const cr = writeNl('cr.txt', 'a\rb\rc\r')
+        const mixed = writeNl('mixed.txt', 'a\r\nb\nc\rd\n')
+        const crRead = readOne(cr)
+        ok('CR-only 文件按行切分（与编辑器一致）', crRead.ok === true && crRead.lines.length === 3 && crRead.lines[1].line === 'b', JSON.stringify(crRead.lines))
+        const mixedRead = readOne(mixed)
+        ok('混合换行按行切分', mixedRead.ok === true && mixedRead.lines.length === 4 && mixedRead.lines[3].line === 'd', JSON.stringify(mixedRead.lines))
+    }
 }
 finally {
     rmSync(dir, { recursive: true, force: true })

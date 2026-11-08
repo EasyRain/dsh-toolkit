@@ -69,6 +69,10 @@ try {
         writeFileSync(tail, 'a\nb\n')
         const tailText = await run({ path: tail, content: 'a\nb' })
         ok('尾换行差异被指出', /结尾换行/.test(tailText) && !/@@/.test(tailText), tailText)
+        const crOnly = join(dir, 'cr-only.txt')
+        writeFileSync(crOnly, 'a' + String.fromCharCode(13) + 'b' + String.fromCharCode(13))
+        const crText = await run({ path: crOnly, content: 'a' + String.fromCharCode(10) + 'b' + String.fromCharCode(10) })
+        ok('CR-only 与 LF 视为行内容相同（字节不同）', /字节不同/.test(crText) && !/@@/.test(crText), crText)
     }
 
     console.log('== 5. 错误与只读 ==')
