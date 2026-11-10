@@ -44,7 +44,7 @@
 - **沙箱**：会话策略不是 `danger-full-access` 时，整条 argv 会先过 `sandbox.confine(argv, policy, signal)`，用**它的** argv 起进程；退出码非 0 且 stderr 命中 `denialSignatures` 就在回执里标 `[sandbox: file access denied under <mode> mode]`。
   **拿不到 `sandboxPolicy`/`sandbox.confine` 或 confinement 结果无效 ⇒ 直接拒绝执行（`SANDBOX_UNAVAILABLE`，命令根本没跑）**，绝不"先放过去再说"。`danger-full-access` 下不包装（与宿主同权限）。
   **Windows + 受限模式**：系统 Git Bash 起不来（MSYS 建信号管道被沙箱拒绝，`0xC0000142`）⇒ 需要一个**能在沙箱里跑的运行时**，再走 `sandbox.confine`。
-  **只认我们自己的 Niubash**（`%LOCALAPPDATA%\dsh-toolkit\niubash\1.5.0`，或离线包自带的 `runtime/niubash/<版本>`）：设置页「Bash 执行器」下的“安装受限运行时”（约 33 MB，GitHub 源，`/dsh-toolkit/bash/runtime/install`）一键装；
+  **只认我们自己的 Niubash**（`%LOCALAPPDATA%\dsh-toolkit\niubash\1.5.0`，或离线包自带的 `runtime/niubash/<版本>`）：设置页「Bash 执行器」下有两个安装按钮 ——「从国内加速安装」（GitHub 反代 `ghfast.top`，失败自动试 `gh-proxy.com`）与「从 GitHub 安装」（`/dsh-toolkit/bash/runtime/install`，约 33 MB）；归档 sha256 钉死，反代改一个字节就拒绝安装；
   归档 sha256 钉死，解包自带 tar.gz 读取（只写普通文件/目录/硬链接，拒绝绝对路径 / `..` / 符号链接），装完把 exe 的 size+mtime+sha256 记进标记，之后不再重复哈希 33 MB。
   **没装就不启用**（`EXECUTOR_UNAVAILABLE`，提示去下载），不回落系统 bash、也不借 dsh-ops —— 否则不同机器的行为不一致。
   **族按运行时刻关闭**：`apply()` 拿不到运行时 ⇒ 一个工具都不注册（等价于族被关）；设置页装完后安装器会回调立即挂载，**不用重启宿主**。设置页里运行时未安装时开关显示为「关且禁用」。

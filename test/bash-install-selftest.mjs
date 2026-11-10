@@ -167,6 +167,10 @@ console.log('== 6. HTTP 路由（设置页用）==')
     mountBashRoutes(ctx, () => {})
     ok('注册四条精确路由（bash 两条 + 受限运行时两条）', routes.length === 4 && routes.every((route) => route.kind === 'exact'), JSON.stringify(routes.map((r) => r.path)))
     ok('路径与客户端一致', routes.map((route) => route.path).join(',') === `${STATUS_PATH},${INSTALL_PATH},${RUNTIME_STATUS_PATH},${RUNTIME_INSTALL_PATH}`)
+    ok('运行时安装路由接受 source（缺省 mirror）', (() => {
+        const route = routes.find((item) => item.path === RUNTIME_INSTALL_PATH)
+        return typeof route?.handler === 'function'
+    })())
 
     const call = (route, request) => {
         let status = null

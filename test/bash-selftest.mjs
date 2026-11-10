@@ -359,10 +359,10 @@ console.log('== 16. 沙箱闸门（非完全权限必须真受限，否则拒绝
         const noPolicyOut = await noPolicy.execute({ command: 'echo should-not-run' }, { agent: { session: {} } })
         ok('拿不到 sandboxPolicy ⇒ 拒绝执行', /ok=false/.test(noPolicyOut) && /SANDBOX_UNAVAILABLE/.test(noPolicyOut) && !/should-not-run/.test(noPolicyOut), noPolicyOut.slice(0, 200))
 
-        // Windows 受限模式：系统 Git Bash 在沙箱里起不来 ⇒ 提前拒绝并说明（而不是崩在半路或放行）
+        // Windows 但拿不到可用的运行时 ⇒ 提前拒绝，并指向设置页（不提"受限模式"这种死说法）
         const winRestricted = define(makeCtx('workspace-write', { confine: async (argv) => ({ argv, enforcement: 'full' }) }), 'win32')
         const winOut = await winRestricted.execute({ command: 'touch win32-touched.txt' }, { agent: { session: {} } })
-        ok('Windows 受限模式拒绝系统 Git Bash 并给出出路', /ok=false/.test(winOut) && /EXECUTOR_UNAVAILABLE/.test(winOut) && /danger-full-access/.test(winOut), winOut.slice(0, 240))
+        ok('Windows 运行时不可用 ⇒ 拒绝执行并指向设置页', /ok=false/.test(winOut) && /EXECUTOR_UNAVAILABLE/.test(winOut) && /设置/.test(winOut), winOut.slice(0, 240))
         ok('Windows 拒绝时命令确实没跑', !existsSync(join(dir5, 'win32-touched.txt')))
     }
     finally {
@@ -556,7 +556,8 @@ console.log('== 22c. 运行时不在了 ⇒ shell 族整个不注册（并登记
 {
     const registered = []
     const fakeCtx = { tools: { register: (tool) => registered.push(tool) }, get: () => undefined }
-    const none = bashModule.apply(fakeCtx, (tool) => tool, { platform: 'win32' })
+    // 显式传空 bashPath 模拟"运行时未安装"（开发机上可能已经装过运行时）
+    const none = bashModule.apply(fakeCtx, (tool) => tool, { platform: 'win32', bashPath: '' })
     ok('没有运行时 ⇒ apply 返回 0、一个工具都不注册', none === 0 && registered.length === 0, JSON.stringify({ none, registered: registered.length }))
 
     ok('缺运行时登记的挂载回调可被执行', (await bashModule.requestShellRemount()) === false)

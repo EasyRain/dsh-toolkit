@@ -4,6 +4,16 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.8.2 — 2026-11-10（安装入口：国内加速源 + 去术语化文案）
+
+- **两个下载源**：`mirror`（GitHub 反代 `ghfast.top`，失败自动试 `gh-proxy.com`）与 `github`（官方）。
+  反代是第三方服务，但**归档 sha256 钉死** —— 改一个字节就拒绝安装，所以只影响可达性、不影响完整性。
+  设置页对应两个按钮：「从国内加速安装」「从 GitHub 安装」；路由 `/dsh-toolkit/bash/runtime/install` 接受 `{"source":"mirror"|"github"}`（缺省 mirror）。
+- **文案去术语化**：不再写「受限模式」「沙箱」「不需要 dsh-ops」这类措辞 —— bash 现在不分模式、由族开关控制，文案只说
+  「还没有安装 bash 运行时（约 33 MB）。装好后即可在任意会话里使用 bash。」
+- `EXECUTOR_UNAVAILABLE` 的提示同步收敛为「bash 运行时不可用（未安装或已损坏）→ 去设置页安装」，不再提 danger-full-access。
+- 真机验证：`mirror` 11.4 s / `github` 4.2 s，两者都通过 sha256 校验并成功解包运行。
+
 ## 0.8.1 — 2026-11-10（运行时不在 ⇒ shell 族整个关闭，装好自动恢复）
 
 - `apply()` 现在检查运行时：**没有就一个工具都不注册**（等价于族被关闭），不再出现"开关是开着的、
