@@ -4,6 +4,22 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.9.4 — 2026-11-10（补齐 read-only 模式）
+
+宿主只有三种模式：`read-only` / `workspace-write` / `danger-full-access`。0.9.x 的闸门覆盖了后两种，
+`read-only` 只覆盖到"写文件"这一层，还有三处会写盘：
+
+- **`checkpoint` 的 `create`**：快照落在 `$DSH_HOME/checkpoints`，只读会话里既没用（`restore` 同样被拒）又占空间 ⇒ 现在直接拒；
+- **`checkpoint` 的 `journal_restore`**：单文件回滚也是写盘，之前只做了"工作区边界"校验，没过策略 ⇒ 现在过闸门；
+- **`session_export`**：导出会写目标文件，之前完全没过策略 ⇒ 现在过闸门（只读拒绝、工作区外按宿主策略）。
+
+另外确认过的边界（不用改）：`file` 的 read/stat/diff、`ast_search`、`table_diff`、`session_*` 的读操作、
+`checkpoint` 的 `list`/`diff` 在只读下本来就不写盘；`bash` 走 `sandbox.confine`，只读时由宿主围栏拦住写入。
+
+新增 3 条回归（只读拒建快照 / workspace-write 允许 / 拿不到策略放行）。
+
+全量 **1,604** 条断言通过；`check-package` 62/62；schema 不变（35,350 B）。
+
 ## 0.9.3 — 2026-11-10（受限会话也隐藏宿主 pwsh）
 
 `mountHostShellHiding` 里有一条历史判断：**受限会话（read-only / workspace-write）保留 `pwsh`**，

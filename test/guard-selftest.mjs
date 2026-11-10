@@ -141,6 +141,19 @@ try {
         const denied = await denyOf(() => tool.execute({ action: 'write', path: join(root, 'with-exec.txt'), content: 'x\n' }, { agent: { session } }))
         ok('带 exec ⇒ 用会话策略（read-only ⇒ 拒绝）', denied instanceof guard.SandboxDeniedError && /read-only/.test(String(denied.message)), String(denied?.message))
     }
+    console.log('== 7. read-only：连插件自己的仓库也不写 ==')
+    {
+        const roCtx = fakeCtx('read-only')
+        let error = null
+        try { guard.assertWritableStorage(roCtx, null, '创建快照') } catch (thrown) { error = thrown }
+        ok('read-only ⇒ 创建快照被拒', error instanceof guard.SandboxDeniedError && /read-only/.test(String(error.message)), String(error?.message))
+        let allowed = true
+        try { guard.assertWritableStorage(fakeCtx('workspace-write'), null, '创建快照') } catch { allowed = false }
+        ok('workspace-write ⇒ 允许写快照仓库', allowed)
+        let safe = true
+        try { guard.assertWritableStorage({ get: () => undefined }, null, '创建快照') } catch { safe = false }
+        ok('拿不到策略 ⇒ 放行', safe)
+    }
 }
 finally {
     try { rmSync(root, { recursive: true, force: true }) } catch { /* Windows 偶发占用 */ }
