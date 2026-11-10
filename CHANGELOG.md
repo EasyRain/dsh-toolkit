@@ -4,6 +4,16 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.9.1 — 2026-11-10（修正闸门自测的跨平台路径）
+
+`guard-selftest` 里用 `process.env.USERPROFILE ?? root` 造“工作区外”路径 —— Linux 上没有 `USERPROFILE`，
+退化成 tmpdir 下的目录，而 **tmpdir 本来就是可写根** ⇒ 误报 7 条失败（CI Ubuntu 红）。
+
+- 改用 `homedir()`（Windows 是 `C:\Users\…`，Linux 是 `/home/runner`），两边都落在可写根之外；
+- 注释说明为什么“工作区外”必须避开 tmpdir —— 宿主也把 `/tmp` 与 `os.tmpdir()` 算作可写根。
+
+逻辑没变，只是测试路径选错了。
+
 ## 0.9.0 — 2026-11-10（写操作也遵守沙箱策略）
 
 **修一个真缺口**：`bash` 会过 `sandbox.confine`（真正被关住），但 `file` / `ast_edit` / `checkpoint_restore` / `download`

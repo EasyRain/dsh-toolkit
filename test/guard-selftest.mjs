@@ -8,7 +8,7 @@
  * 跑法：node test/guard-selftest.mjs
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const guard = await import('../lib/guard.js')
@@ -23,6 +23,8 @@ const ok = (label, cond, extra = '') => {
 
 const root = mkdtempSync(join(tmpdir(), 'tk-guard-'))
 const workspace = join(root, 'ws')
+// "工作区外" 的探针路径：**必须落在 tmpdir 之外**（宿主也把 /tmp 与 os.tmpdir() 列为可写根）。
+const outsideDir = process.env.USERPROFILE ?? homedir()
 mkdirSync(workspace, { recursive: true })
 
 /** 造一个只有 `sandboxPolicy` 的假 ctx。 */
@@ -52,9 +54,9 @@ try {
         const allow = (ctx, target) => guard.inspectTargets({ policy: guard.resolveFilePolicy(ctx), targets: [target] }) === null
         ok('workspace-write / 工作区内（新文件）⇒ 放行', allow(mk('workspace-write'), join(workspace, 'new.txt')))
         ok('workspace-write / 平台临时目录 ⇒ 放行（宿主也放行）', allow(mk('workspace-write'), join(tmpdir(), 'tk-guard-temp.txt')))
-        ok('workspace-write / 用户主目录 ⇒ 拒绝', !allow(mk('workspace-write'), join(process.env.USERPROFILE ?? root, 'tk-guard-out.txt')))
+        ok('workspace-write / 用户主目录 ⇒ 拒绝', !allow(mk('workspace-write'), join(outsideDir, 'tk-guard-out.txt')))
         ok('read-only / 工作区内也拒绝', !allow(mk('read-only'), join(workspace, 'a.txt')))
-        ok('danger-full-access ⇒ 放行', allow(mk('danger-full-access'), join(process.env.USERPROFILE ?? root, 'tk-guard-out.txt')))
+        ok('danger-full-access ⇒ 放行', allow(mk('danger-full-access'), join(outsideDir, 'tk-guard-out.txt')))
         ok('拿不到策略服务 ⇒ 放行（由宿主兜底）', allow({ get: () => undefined }, join(root, 'x.txt')))
         ok('additionalWritableRoots 生效', (() => {
             const extra = join(root, 'extra')
@@ -66,7 +68,7 @@ try {
 
     console.log('== 2. 拒绝时的形状（模型可读）==')
     {
-        const error = await denyOf(async () => guard.assertWritableTargets(fakeCtx('workspace-write'), [join(process.env.USERPROFILE ?? root, 'nope.txt')]))
+        const error = await denyOf(async () => guard.assertWritableTargets(fakeCtx('workspace-write'), [join(outsideDir, 'nope.txt')]))
         ok('抛 SandboxDeniedError 且 code = FS_SANDBOX_DENIED', error instanceof guard.SandboxDeniedError && error.code === 'FS_SANDBOX_DENIED', String(error))
         ok('消息带宿主同款标记', /\[sandbox: file access denied under workspace-write mode\]/.test(String(error?.message)), String(error?.message))
         ok('消息里点名目标路径', String(error?.message).includes('nope.txt'), String(error?.message))
@@ -78,10 +80,10 @@ try {
         await fileTool.execute({ action: 'write', path: inside, content: 'hi\n' })
         ok('工作区内 write 正常', (await fileTool.execute({ action: 'read', path: inside })).includes('hi'))
 
-        const outsideError = await denyOf(() => fileTool.execute({ action: 'write', path: join(process.env.USERPROFILE ?? root, 'tk-guard-deny.txt'), content: 'x' }))
+        const outsideError = await denyOf(() => fileTool.execute({ action: 'write', path: join(outsideDir, 'tk-guard-deny.txt'), content: 'x' }))
         ok('工作区外 write 被拒', outsideError !== null && /\[sandbox: file access denied/.test(String(outsideError.message)), String(outsideError))
 
-        const removeError = await denyOf(() => fileTool.execute({ action: 'remove', path: join(process.env.USERPROFILE ?? root, 'tk-guard-deny.txt'), confirm: true }))
+        const removeError = await denyOf(() => fileTool.execute({ action: 'remove', path: join(outsideDir, 'tk-guard-deny.txt'), confirm: true }))
         ok('工作区外 remove 被拒', removeError !== null && /\[sandbox: file access denied/.test(String(removeError.message)), String(removeError))
 
         ok('read 不受影响（工作区外也能读）', typeof (await fileTool.execute({ action: 'read', path: 'C:/Windows/win.ini' }).catch(() => '')) === 'string')
@@ -102,14 +104,14 @@ try {
     {
         const error = await denyOf(async () => checkpoint.restoreCheckpoint({
             id: 'whatever',
-            cwd: join(process.env.USERPROFILE ?? root, 'other-workspace'),
+            cwd: join(outsideDir, 'other-workspace'),
             dryRun: false,
             confirm: true,
             guardCtx: fakeCtx('workspace-write'),
         }))
         ok('显式 cwd 在快照之**前**就被闸门拒（不会去读快照）', error instanceof guard.SandboxDeniedError, String(error?.message))
         ok('preview（dryRun 默认）不拦，仍会照常报快照不存在', /no checkpoint/i.test(String((await denyOf(async () => checkpoint.restoreCheckpoint({
-            id: 'whatever', cwd: join(process.env.USERPROFILE ?? root, 'x'), guardCtx: fakeCtx('workspace-write'),
+            id: 'whatever', cwd: join(outsideDir, 'x'), guardCtx: fakeCtx('workspace-write'),
         })))?.message ?? '')), '')
     }
 }
