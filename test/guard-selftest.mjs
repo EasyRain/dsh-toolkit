@@ -114,6 +114,33 @@ try {
             id: 'whatever', cwd: join(outsideDir, 'x'), guardCtx: fakeCtx('workspace-write'),
         })))?.message ?? '')), '')
     }
+    console.log('== 6. 必须带 session 解析策略（否则拿到的是默认策略）==')
+    {
+        const session = { id: 'selftest-session' }
+        const seen = []
+        const spyCtx = {
+            get: () => ({
+                resolve: (options) => {
+                    seen.push(options)
+                    return { mode: 'danger-full-access', workspaceRoot: root }
+                },
+            }),
+        }
+        guard.assertWritableTargets(spyCtx, [join(root, 'x.txt')], { session })
+        ok('assertWritableTargets 把 session 传给 sandboxPolicy.resolve', seen[0]?.session === session, JSON.stringify(seen[0] ?? null))
+
+        // 文件工具把 execute 的 exec 透传到闸门：带 exec ⇒ 策略被当成 read-only ⇒ 拒绝。
+        const ctx2 = {
+            get: () => ({
+                resolve: (options) => ({ mode: options?.session ? 'read-only' : 'danger-full-access', workspaceRoot: outsideDir }),
+            }),
+        }
+        const tool = fileFamily.tools(defineTool, { getCtx: () => ctx2, resolveWorkspaceCwd: () => workspace })[0]
+        await tool.execute({ action: 'write', path: join(root, 'noexec.txt'), content: 'x\n' })
+        ok('不带 exec ⇒ 拿到的是宽松策略（可写）', true)
+        const denied = await denyOf(() => tool.execute({ action: 'write', path: join(root, 'with-exec.txt'), content: 'x\n' }, { agent: { session } }))
+        ok('带 exec ⇒ 用会话策略（read-only ⇒ 拒绝）', denied instanceof guard.SandboxDeniedError && /read-only/.test(String(denied.message)), String(denied?.message))
+    }
 }
 finally {
     try { rmSync(root, { recursive: true, force: true }) } catch { /* Windows 偶发占用 */ }

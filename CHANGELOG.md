@@ -4,6 +4,20 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.9.2 — 2026-11-10（闸门必须带 session 解析策略）
+
+v0.9.0/0.9.1 的闸门是拿 `sandboxPolicy.resolve()` **不带参数**问的，宿主这时返回的是**默认策略**：
+`workspaceRoot` = profile 目录（`…\.dsh\profiles\desktop`），而不是本次会话的工作区。
+后果：在 workspace-write 会话里，**工作区内的正常写入被误判成越界**并拒绝（实测 `D:\DshWorkSpace\Addons` 下写文件被拒）。
+
+- `file` / `ast_edit` / `checkpoint`(restore) / `download` 现在都把 `execute(args, exec)` 里的
+  `exec.agent.session` 传给闸门，`resolve({ session })` 才能拿到会话级策略（`workspaceRoot` = 会话工作区）。
+- 新增 3 条回归：`assertWritableTargets` 确实把 `session` 透传给 `sandboxPolicy.resolve`；
+  文件工具带/不带 `exec` 会得到不同策略（read-only vs 宽松）。
+- 顺带记一笔：这是"**问宿主权限必须带上下文**"的又一处 —— 与 `sandbox.confine` 需要 `policy` 同源。
+
+全量 **1,601** 条断言通过；`check-package` 62/62；schema 不变（35,350 B）。
+
 ## 0.9.1 — 2026-11-10（修正闸门自测的跨平台路径）
 
 `guard-selftest` 里用 `process.env.USERPROFILE ?? root` 造“工作区外”路径 —— Linux 上没有 `USERPROFILE`，
