@@ -4,6 +4,20 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.10.5 — 2026-11-10（后台/晋升回执教模型用 wait，而不是 sleep 轮询）
+
+ops 有一整套 `job-wait-guidance`（往 system section 里塞提示，占常驻 token）。我们用零成本的做法：
+**把提示写进回执本身**，模型当场就能看到。
+
+- 后台回执：`用 job_output { id, wait: true } 等它结束（阻塞到完成或超时；不要用 sleep 轮询）`；
+- 晋升（超时转后台）回执同样带这句，并顺手把 `--- stdout (partial) ---` / `--- stderr (partial) ---`
+  的 `(empty)` 去掉（与 0.8.3 的回执口径一致：空流不占行）；
+- 工具描述里补一句 `use job_output with wait:true instead of polling`。
+
+回归：后台回执必须同时包含 `wait: true` 与「不要用 sleep 轮询」。
+
+全量 **1,640** 条断言通过；`check-package` 62/62；schema 不变（35,636 B）。
+
 ## 0.10.4 — 2026-11-10（截断读取也报对方编码，不按前缀瞎猜）
 
 真机验证时发现：`file read` 带小 `maxBytes` 读一个大 Big5 文件，回执写 `encoding=utf8`——

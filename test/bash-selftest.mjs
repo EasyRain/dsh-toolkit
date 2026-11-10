@@ -572,6 +572,22 @@ console.log('== 22c. 运行时不在了 ⇒ shell 族整个不注册（并登记
     ok('有运行时 ⇒ 注册 1 个 bash', withRuntime === 1 && registered.some((tool) => tool.name === 'bash'), String(withRuntime))
 }
 
+console.log('== 22f. 后台/晋升回执：教模型用 wait 而不是轮询 ==')
+{
+    const def = tools((tool) => tool, { getJobs: () => fakeJobs })[0]
+    // fakeJobs 已在后台用例里定义；这里单独造一份最小实现
+    const started = []
+    const jobs = {
+        start: (options) => { started.push(options); return 'job-wait-1' },
+        remove: () => true,
+        get: () => undefined,
+    }
+    const def2 = tools((tool) => tool, { getJobs: () => jobs })[0]
+    const out = await def2.execute({ command: 'echo hi', run_in_background: true, description: 'bg' }, { agent: { id: 'a', session: {} } })
+    ok('后台回执提示 wait:true', /job_output \{ id, wait: true \}/.test(out), out.slice(0, 160))
+    ok('后台回执明确劝阻 sleep 轮询', /不要用 sleep 轮询/.test(out), out.slice(0, 160))
+}
+
 console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
 {
     const dir9 = mkdtempSync(join(tmpdir(), 'tk bash dispose-'))
