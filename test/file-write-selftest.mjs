@@ -71,7 +71,7 @@ try {
     const gbk = join(dir, 'gbk.txt')
     writeFileSync(gbk, Buffer.from([0xc4, 0xe3, 0xba, 0xc3, 0x0a]))
     const gbkEdit = editFileOp({ path: gbk, edits: [{ oldText: '你好', newText: '您好' }] })
-    ok('GB18030 拒绝编辑（不悄悄改编码）', gbkEdit.ok === false && /GB18030/.test(gbkEdit.message), String(gbkEdit.message))
+    ok('GB18030 拒绝编辑（不悄悄改编码）', gbkEdit.ok === false && /gb18030/i.test(gbkEdit.message), String(gbkEdit.message))
 
     console.log('== 3. copy / move / remove / mkdir / stat ==')
     const src = join(dir, 'src.txt')

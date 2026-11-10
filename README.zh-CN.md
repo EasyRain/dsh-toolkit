@@ -5,7 +5,7 @@
 > A host-side plugin for the DSH desktop app. [English →](README.md)
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-38%20suites%20passing-brightgreen.svg)](#开发)
+[![tests](https://img.shields.io/badge/tests-39%20suites%20passing-brightgreen.svg)](#开发)
 
 ## 它解决什么
 
@@ -70,7 +70,7 @@ node scripts/test-changed.mjs --rebaseline   # 全量绿了之后记录基线（
 node test/ast-edit-selftest.mjs         # 需要 @ast-grep/napi（源树或 profile 副本里都能找到）
 node test/diff-engine-selftest.mjs
 node test/checkpoint-guards-selftest.mjs
-# 共 38 份 *-selftest.mjs，全部应打印 ALL PASS
+# 共 39 份 *-selftest.mjs，全部应打印 ALL PASS
 # 全量并给出**可核对的总数**（改到公共面/发布面、或收尾时跑）：
 #   node test/run-all.mjs   ->  TOTAL: 31 files, ~1150 passed, 0 failed, 0 non-zero exit
 #   **默认并发**（按核数自适应 2–8 路；每份各自 mkdtemp 沙盒 ⇒ 互不干扰）：32 核机器上 31 s（串行 138 s）。
