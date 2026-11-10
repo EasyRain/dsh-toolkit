@@ -169,6 +169,29 @@ try {
         ok('UTF-8 大文件 + 小窗口 ⇒ 仍是 utf8', read.readOne(utf8File, { maxBytes: 200 }).encoding === 'utf8')
     }
 
+    console.log('== 10. 无 BOM 的 UTF-16（Windows 工具偶尔会写）==')
+    {
+        const text = 'hello world 中文 test\n'
+        const le = Buffer.from(text, 'utf16le')
+        const be = Buffer.alloc(le.length)
+        le.copy(be)
+        be.swap16()
+
+        ok('UTF-16LE 无 BOM ⇒ 认出 utf16le', read.decodeBuffer(le).encoding === 'utf16le', read.decodeBuffer(le).encoding)
+        ok('UTF-16BE 无 BOM ⇒ 认出 utf16be', read.decodeBuffer(be).encoding === 'utf16be', read.decodeBuffer(be).encoding)
+        ok('内容解码正确（LE）', read.decodeBuffer(le).text === text, JSON.stringify(read.decodeBuffer(le).text))
+
+        const leFile = join(root, 'nobom-utf16le.txt')
+        writeFileSync(leFile, le)
+        const one = read.readOne(leFile, {})
+        ok('readOne 不再把它当二进制（给 hex）', one.encoding === 'utf16le' && Array.isArray(one.lines), JSON.stringify(one.encoding))
+        ok('行内容正确', one.lines[0].line === 'hello world 中文 test', JSON.stringify(one.lines[0]?.line))
+
+        const binFile = join(root, 'real-binary.dat')
+        writeFileSync(binFile, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 3, 0, 4, 0, 5, 0, 6, 0, 7]))
+        ok('真二进制仍然给 hex（不被 UTF-16 规则吞掉）', read.readOne(binFile, {}).encoding === undefined, String(read.readOne(binFile, {}).encoding))
+    }
+
     console.log('== 8. 未知编码名要明确报错（不静默回退）==')
     {
         let error = null

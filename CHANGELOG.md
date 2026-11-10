@@ -4,6 +4,18 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.10.6 — 2026-11-10（无 BOM 的 UTF-16 不再被当成二进制）
+
+Windows 上有些工具会写**没有 BOM 的 UTF-16**（尤其 UTF-16LE）。以前这类文件在 `file read` 里
+直接被 `looksBinary()` 判成二进制 ⇒ 只给 hex 预览，内容看不到。
+
+- 新增 `sniffUtf16WithoutBom()`：按 **NUL 的奇偶分布**判断（utf16le 的低字节在前，NUL 都在奇数位，反之亦然），
+  并要求"文本那半边确实像文本"（可打印 ASCII 或 ≥0x80）——避免把带 NUL 的二进制误判成 UTF-16。
+- 判定顺序：**BOM → 无 BOM 的 UTF-16 → 严格 UTF-8 → CJK 多候选**；`readOne` 的二进制检查会先问它。
+- 回归：UTF-16LE/BE 无 BOM 的文本能正确读出（不再给 hex）；真二进制仍给 hex。
+
+全量 **1,646** 条断言通过；`check-package` 62/62；schema 不变（35,636 B）。
+
 ## 0.10.5 — 2026-11-10（后台/晋升回执教模型用 wait，而不是 sleep 轮询）
 
 ops 有一整套 `job-wait-guidance`（往 system section 里塞提示，占常驻 token）。我们用零成本的做法：
