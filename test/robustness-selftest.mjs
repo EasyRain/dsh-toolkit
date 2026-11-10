@@ -108,41 +108,64 @@ try {
     // 真正的并发：异步 spawn + 屏障（**不要**用 spawnSync 预演 —— 它会在屏障上阻塞，
     // 等于让第一个子进程先把文件改掉，其余子进程 preview 时就没匹配了：第一版测试就栽在这）
     const { spawn } = await import('node:child_process')
-    const procs = []
-    for (let i = 0; i < N; i += 1) {
-        const p = spawn(process.execPath, [child, EDIT, target, dir, String(i)], { stdio: ['ignore', 'pipe', 'pipe'] })
-        const rec = { out: '', err: '', code: null, i }
-        p.stdout.on('data', (d) => { rec.out += d })
-        p.stderr.on('data', (d) => { rec.err += d })
-        p.on('close', (code) => { rec.code = code })
-        procs.push(rec)
-    }
-    // 等所有子进程都 preview 完（ready-i 齐了），再放行
-    const t0 = Date.now()
-    while (Date.now() - t0 < 20000 && !Array.from({ length: N }, (_, i) => existsSync(join(dir, `ready-${i}`))).every(Boolean)) {
-        await new Promise((r) => setTimeout(r, 10))
-    }
-    const readyCount = Array.from({ length: N }, (_, i) => existsSync(join(dir, `ready-${i}`))).filter(Boolean).length
-    ok('所有子进程都完成了 preview（屏障前状态一致）', readyCount === N, `ready=${readyCount}/${N}`)
-    writeFileSync(join(dir, 'go'), '1')
-    const tw = Date.now()
-    while (Date.now() - tw < 30000 && procs.some((p) => p.code === null)) await new Promise((r) => setTimeout(r, 10))
 
-    const okCount = procs.filter((p) => p.code === 0).length
-    const contended = procs.filter((p) => p.code === 3).length
-    const nothingLeft = procs.filter((p) => p.code === 4).length
-    const crashed = procs.filter((p) => p.code !== 0 && p.code !== 3 && p.code !== 4).length
-    ok('恰好一个进程写入成功', okCount === 1, `ok=${okCount} 争用失败=${contended} 无可改=${nothingLeft} codes=${procs.map((p) => p.code).join(',')}`)
+    /**
+     * 跑一轮并发写。返回这一轮的结果，由调用方判定。
+     *
+     * ⚠️ 为什么要"最多一个成功"而不是"恰好一个"：CI 的 Windows runner 上偶发**四个全被拒**
+     * （锁获取/文件占用抖动，见 codes=3,3,3,3），此时文件仍是原文 —— 这是**安全的**并发结局，
+     * 却会让"恰好一个"必然变红。所以这里只断言真正的安全不变量：
+     *   ① 绝不允许两个同时写成功；② 文件是"原文"或"完整改完"，不能是交错/半截。
+     * 并在全被拒时重试一轮，把环境抖动与实际锁失效区分开。
+     */
+    const runRace = async () => {
+        const procs = []
+        for (let i = 0; i < N; i += 1) {
+            const p = spawn(process.execPath, [child, EDIT, target, dir, String(i)], { stdio: ['ignore', 'pipe', 'pipe'] })
+            const rec = { out: '', err: '', code: null, i }
+            p.stdout.on('data', (d) => { rec.out += d })
+            p.stderr.on('data', (d) => { rec.err += d })
+            p.on('close', (code) => { rec.code = code })
+            procs.push(rec)
+        }
+        const t0 = Date.now()
+        while (Date.now() - t0 < 20000 && !Array.from({ length: N }, (_, i) => existsSync(join(dir, `ready-${i}`))).every(Boolean)) {
+            await new Promise((r) => setTimeout(r, 10))
+        }
+        const readyCount = Array.from({ length: N }, (_, i) => existsSync(join(dir, `ready-${i}`))).filter(Boolean).length
+        writeFileSync(join(dir, 'go'), '1')
+        const tw = Date.now()
+        while (Date.now() - tw < 30000 && procs.some((p) => p.code === null)) await new Promise((r) => setTimeout(r, 10))
+        const okCount = procs.filter((p) => p.code === 0).length
+        const contended = procs.filter((p) => p.code === 3).length
+        const nothingLeft = procs.filter((p) => p.code === 4).length
+        const crashed = procs.filter((p) => p.code !== 0 && p.code !== 3 && p.code !== 4).length
+        return { procs, readyCount, okCount, contended, nothingLeft, crashed, finalText: readFileSync(target, 'utf8') }
+    }
+
+    let race = await runRace()
+    ok('所有子进程都完成了 preview（屏障前状态一致）', race.readyCount === N, `ready=${race.readyCount}/${N}`)
+    if (race.okCount === 0) {
+        // 全员被拒：环境性抖动（锁/占用）。重试一轮，把"偶然"与"锁真失效"分开。
+        writeFileSync(target, original)
+        race = await runRace()
+    }
+    ok('最多一个进程写入成功（绝不出现两个同时写）', race.okCount <= 1, `ok=${race.okCount} codes=${race.procs.map((p) => p.code).join(',')}`)
+    ok('并发之后仍有成功者（重试后仍全员被拒 ⇒ 锁机制可能真失效）', race.okCount === 1,
+        `ok=${race.okCount} 争用失败=${race.contended} 无可改=${race.nothingLeft} codes=${race.procs.map((p) => p.code).join(',')}`)
     // 并发结局只有两类，都算"正常"：① 拿不到锁/预览后文件被改过 ⇒ 明确拒绝；② preview 太晚、已无可改 ⇒ 无需提交。
     // **不许出现**第三种：进程崩掉（既不是 0/3/4）。偶发一次就说明测试写得不严（真 Linux 上抓到过）。
-    ok('没有任何子进程异常退出（崩掉）', crashed === 0, `codes=${procs.map((p) => p.code).join(',')}`)
+    ok('没有任何子进程异常退出（崩掉）', race.crashed === 0, `codes=${race.procs.map((p) => p.code).join(',')}`)
     // ⚠️ 用 `m` 标志按**行**匹配：子进程先打一行 `PREVIEW …`，`^ERR` 不能锚在整段开头。
     const errLine = (p) => (p.out.match(/^ERR (LOCK|STALE|OTHER)\b.*$/m) ?? ['(没有 ERR 行)'])[0]
     ok('争用的那部分给了可读原因（LOCK/STALE；环境性 IO 失败允许 OTHER，但必须带 effect=none/unknown）',
-        procs.filter((p) => p.code === 3).every((p) => /^ERR (LOCK|STALE)\b/m.test(p.out) || (/^ERR OTHER\b/m.test(p.out) && /\beffect=(none|unknown)\b/.test(p.out))),
-        procs.filter((p) => p.code === 3).map((p) => errLine(p).slice(0, 56)).join(' | '))
-    const finalText = readFileSync(target, 'utf8')
-    ok('文件内容完整且正确（没有交错/截断）', finalText === expected, `len=${finalText.length} exp=${expected.length}`)
+        race.procs.filter((p) => p.code === 3).every((p) => /^ERR (LOCK|STALE)\b/m.test(p.out) || (/^ERR OTHER\b/m.test(p.out) && /\beffect=(none|unknown)\b/.test(p.out))),
+        race.procs.filter((p) => p.code === 3).map((p) => errLine(p).slice(0, 56)).join(' | '))
+    // 核心不变量：要么原文，要么完整改完 —— 绝不能是交错/半截。
+    ok('文件内容是"原文"或"完整改完"（没有交错/截断）',
+        race.finalText === original || race.finalText === expected,
+        `len=${race.finalText.length} exp=${expected.length} orig=${original.length}`)
+    ok('有成功者时内容必须是完整改完', race.okCount !== 1 || race.finalText === expected, `len=${race.finalText.length}`)
     ok('没有留下 .dsh-tmp-* 临时文件', !readdirSync(dir).some((n) => n.includes('dsh-tmp')), readdirSync(dir).filter((n) => n.includes('dsh-tmp')).join(','))
     const lockLeft = existsSync(LOCKDIR) ? readdirSync(LOCKDIR).length : 0
     ok('锁目录里没有残留锁', lockLeft === 0, `left=${lockLeft}`)
