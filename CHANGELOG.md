@@ -4,6 +4,13 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.6.1 — 2026-11-10（下载目录不能落在安装根下）
+
+CI（Ubuntu）暴露的小问题：`installNiubash` 把归档下到 `%TEMP%`，Linux 上没有 `TEMP`/`TMP` 时退化成**安装根目录**，于是"哈希不符 ⇒ 未安装"这条失败路径会留下一个空的 `niubash/1.5.0` 目录 —— 看起来像装了一半。
+
+- 改成在 `os.tmpdir()` 里 `mkdtemp` 一个独立工作目录放归档，结束时整目录删掉；
+- 安装失败不再创建/留下安装根。
+
 ## 0.6.0 — 2026-11-10（不依赖 dsh-ops：自带受限运行时）
 
 **方向修正**：dsh-toolkit 是独立插件，**没装 dsh-ops 才是常态**。此前 Windows 受限模式（workspace-write / read-only）完全依赖 dsh-ops 的受限运行时，等于把"最常见的场景"绑在一个可选包上。
