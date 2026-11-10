@@ -47,6 +47,7 @@
   **只认我们自己的 Niubash**（`%LOCALAPPDATA%\dsh-toolkit\niubash\1.5.0`，或离线包自带的 `runtime/niubash/<版本>`）：设置页「Bash 执行器」下的“安装受限运行时”（约 33 MB，GitHub 源，`/dsh-toolkit/bash/runtime/install`）一键装；
   归档 sha256 钉死，解包自带 tar.gz 读取（只写普通文件/目录/硬链接，拒绝绝对路径 / `..` / 符号链接），装完把 exe 的 size+mtime+sha256 记进标记，之后不再重复哈希 33 MB。
   **没装就不启用**（`EXECUTOR_UNAVAILABLE`，提示去下载），不回落系统 bash、也不借 dsh-ops —— 否则不同机器的行为不一致。
+  **族按运行时刻关闭**：`apply()` 拿不到运行时 ⇒ 一个工具都不注册（等价于族被关）；设置页装完后安装器会回调立即挂载，**不用重启宿主**。设置页里运行时未安装时开关显示为「关且禁用」。
 - **与 dsh-ops 的关系**：**完全独立** —— 运行时是我们自己安装/发布的 Niubash，不借 dsh-ops、也不使用它的 `ops_bash`。两个插件都启用时别同时开 shell 族（功能重叠）。
 - **与 `ops_bash` 的差异**：**没有 persistent/PTY 会话**（交互式 `top`、进度条这类不该由本工具承担），也**不做 workspace 预处理**（ACL/临时目录归宿主）；其余能力已对齐：`sandbox_permissions` 逐次升级审批、超时晋升为后台（`promoted`）、前台任务登记为宿主 job、`failure{code,effectState,retry,nextAction}`、会话销毁时收尾活任务、terminal 卡片契约（真实退出码/信号名）。
 - **选哪个 shell**：`pickBash()` **只认我们自己的 Niubash** —— 包内 `runtime/niubash/<版本>`（离线包）→ 用户级缓存（`%LOCALAPPDATA%\dsh-toolkit\niubash\<版本>`，设置页安装）；`DSH_TOOLKIT_BASH` 是**显式调试覆盖**（不是自动探测）。**系统 Git Bash 不参与选择**（`findBash()` 仅用于诊断展示），所以装了运行时前后行为一致，两种模式也用同一个 shell。`DSH_TOOLKIT_BASH_BACKEND` 已移除。

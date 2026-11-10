@@ -18,6 +18,11 @@
  * is regenerated deliberately and reviewed as a diff.
  */
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+// 工具面要**确定性**：shell 族只在"运行时就绪"时注册，而自测/度量环境没有装运行时。
+// `DSH_TOOLKIT_BASH` 是显式调试覆盖（pickBash 只认它和自装运行时），这里指到一个必然存在的可执行文件，
+// 让 schema 预算与工具面断言度量的是"装了运行时之后"的真实形状。
+process.env.DSH_TOOLKIT_BASH = process.env.DSH_TOOLKIT_BASH ?? process.execPath
+
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'

@@ -378,8 +378,10 @@ console.log('== 17. 平台注册面（POSIX 让位给宿主 bash）==')
     ok('shell 族只支持 Windows', platformSupportsShell('linux') === false && platformSupportsShell('darwin') === false && platformSupportsShell('win32') === true)
     const posixCount = apply(fake, (tool) => tool, { platform: 'linux' })
     ok('POSIX 不注册（宿主已有 bash）', posixCount === 0 && registered.length === 0, String(posixCount))
-    const winCount = apply(fake, (tool) => tool, { platform: 'win32' })
-    ok('Windows 注册 1 个 bash', winCount === 1 && registered.length === 1 && registered[0].name === 'bash', String(winCount))
+    const winNoRuntime = apply(fake, (tool) => tool, { platform: 'win32', bashPath: '' })
+    ok('Windows 但没有运行时 ⇒ 不注册（族视为关闭）', winNoRuntime === 0 && registered.length === 0, String(winNoRuntime))
+    const winCount = apply(fake, (tool) => tool, { platform: 'win32', bashPath: TEST_BASH })
+    ok('Windows + 运行时 ⇒ 注册 1 个 bash', winCount === 1 && registered.length === 1 && registered[0].name === 'bash', String(winCount))
     ok('POSIX/Windows 都只注册同名工具（宿主 UI 显示「运行命令」）', registered[0]?.name === 'bash')
 }
 
@@ -548,6 +550,25 @@ console.log('== 22b. 参数错误码 / 未起进程无副作用 / DSH 环境注�
     const defEnv = tools((tool) => tool, { resolveWorkspaceCwd: () => tmpdir(), getCtx: () => envCtx })[0]
     const envText = await defEnv.execute({ command: 'printf "%s|%s" "$DSH_SHELL" "$DSH_SESSION_ID"', description: 'env' })
     ok('宿主 shellEnv 的 DSH_* 注入子进程', /1\|sess-123/.test(envText), envText.slice(0, 200))
+}
+
+console.log('== 22c. 运行时不在了 ⇒ shell 族整个不注册（并登记重挂回调）==')
+{
+    const registered = []
+    const fakeCtx = { tools: { register: (tool) => registered.push(tool) }, get: () => undefined }
+    const none = bashModule.apply(fakeCtx, (tool) => tool, { platform: 'win32' })
+    ok('没有运行时 ⇒ apply 返回 0、一个工具都不注册', none === 0 && registered.length === 0, JSON.stringify({ none, registered: registered.length }))
+
+    ok('缺运行时登记的挂载回调可被执行', (await bashModule.requestShellRemount()) === false)
+    let called = 0
+    bashModule.setShellRemount(async () => { called += 1; return true })
+    ok('requestShellRemount 调用回调并回 true', (await bashModule.requestShellRemount()) === true && called === 1)
+    bashModule.setShellRemount(null)
+    ok('清掉回调后不再执行', (await bashModule.requestShellRemount()) === false && called === 1)
+
+    // 有运行时（自测用显式 bashPath 模拟）⇒ 正常注册
+    const withRuntime = bashModule.apply({ ...fakeCtx, tools: { register: (tool) => registered.push(tool) } }, (tool) => tool, { platform: 'win32', bashPath: TEST_BASH })
+    ok('有运行时 ⇒ 注册 1 个 bash', withRuntime === 1 && registered.some((tool) => tool.name === 'bash'), String(withRuntime))
 }
 
 console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
