@@ -115,7 +115,19 @@ try {
         ok('UTF-8 文件照常可编辑', utf8Edit.ok === true, JSON.stringify(utf8Edit))
     }
 
-    console.log('== 7. 未知编码名要明确报错（不静默回退）==')
+    console.log('== 7b. 大文件采样：探测只看前 64 KB，整份只解码一次 ==')
+    {
+        // 200 KB 的 Big5：样本足以判定，且不能因为"只看了前 64 KB"就判错
+        const unit = FIXTURES.big5
+        const big = Buffer.alloc(unit.length * 12500)
+        for (let i = 0; i < 12500; i += 1) unit.copy(big, i * unit.length)
+        const decoded = read.decodeBuffer(big)
+        ok('200 KB Big5 仍判为 big5', decoded.encoding === 'big5', decoded.encoding)
+        ok('整份解码正确（首尾都对）', decoded.text.startsWith('中文測試') && decoded.text.endsWith('中文測試'), decoded.text.slice(-6))
+        ok('无替换字符', decoded.replacements === 0, String(decoded.replacements))
+    }
+
+    console.log('== 8. 未知编码名要明确报错（不静默回退）==')
     {
         let error = null
         try { read.decodeBuffer(FIXTURES.gbk, 'koi8-r') } catch (thrown) { error = thrown }
