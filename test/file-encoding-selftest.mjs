@@ -77,8 +77,9 @@ try {
 
     console.log('== 4. 不确定时要明说（不能静默猜）==')
     {
-        // 只有 3 个汉字、且都不在常见表里 ⇒ 评分低 ⇒ 应提示歧义
-        const weak = Buffer.from([0xA1, 0x40, 0xA1, 0x41, 0xA1, 0x42])
+        // 足够长、但都是生僻字（不在常见表里）⇒ 评分低 ⇒ 应提示歧义
+        const weak = Buffer.alloc(40, 0)
+        for (let i = 0; i < 40; i += 1) { weak[i * 2] = 0xA1; weak[i * 2 + 1] = 0x40 + (i % 0x3F) }
         const decoded = read.decodeBuffer(weak)
         ok('低分候选 ⇒ ambiguous=true', decoded.ambiguous === true, JSON.stringify(decoded.reason))
         ok('reason 里给出候选列表', Array.isArray(decoded.candidates) && decoded.candidates.length > 1, JSON.stringify(decoded.candidates))
@@ -137,6 +138,14 @@ try {
         const decoded = read.decodeBuffer(mixed)
         ok('ASCII 表头 + Big5 正文 ⇒ 仍判为 big5（不按样本瞎猜）', decoded.encoding === 'big5', decoded.encoding)
         ok('尾部内容正确', decoded.text.endsWith('中文測試'), decoded.text.slice(-6))
+    }
+
+    console.log('== 7d. 证据不足就别喊歧义（3 个字符说明不了什么）==')
+    {
+        const tiny = read.decodeBuffer(Buffer.from([0x83, 0x65, 0x83, 0x58, 0x83, 0x67, 0x0A]))
+        ok('3 字符的 Shift_JIS 不报歧义', tiny.ambiguous === undefined, JSON.stringify(tiny.reason))
+        ok('但仍判对编码与内容', tiny.encoding === 'shift_jis' && tiny.text.startsWith('テスト'), `${tiny.encoding} ${JSON.stringify(tiny.text)}`)
+        ok('空文件不抛错（走 UTF-8 快路径）', read.decodeBuffer(Buffer.alloc(0)).encoding === 'utf8')
     }
 
     console.log('== 8. 未知编码名要明确报错（不静默回退）==')

@@ -4,6 +4,20 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.10.3 — 2026-11-10（小样本不喊歧义；Node 与 Electron 的 ICU 有差异）
+
+真机上一条 7 字节的 Shift_JIS 一直报「候选难以区分」，而同一份代码在 Node 里不报。查清了：
+
+- **Electron（宿主）与 Node 的 ICU 对非法 Big5 序列处理不同**：同一段 `83 65 83 58 83 67`，
+  Node 的 `TextDecoder('big5')` 认为合法、Electron 认为非法 ⇒ 候选集合不同 ⇒ 打分与歧义判定不同。
+  自测跑在 Node、宿主跑在 Electron，这类差异**只能靠真机发现**。
+- 修法不依赖哪个 ICU 对：**证据不足就不喊**——候选文本里非 ASCII 字符少于 8 个时，不给歧义提示
+  （几个字符本来就说明不了什么）。编码与内容判定不变（`テスト` 仍然判对）。
+
+回归：3 字符的 Shift_JIS 不报歧义但内容正确；空文件走 UTF-8 快路径不抛错。
+
+全量 **1,634** 条断言通过；`check-package` 62/62；schema 不变（35,636 B）。
+
 ## 0.10.2 — 2026-11-10（修采样盲区：英文表头 + 后面的中文会被判错）
 
 真机验证 0.10.1 时抓到的**回归**：采样只看前 64 KB，如果这段恰好是纯 ASCII（日志/配置常见的
