@@ -4,6 +4,17 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.9.3 — 2026-11-10（受限会话也隐藏宿主 pwsh）
+
+`mountHostShellHiding` 里有一条历史判断：**受限会话（read-only / workspace-write）保留 `pwsh`**，
+理由是"Windows 的 MSYS bash 在沙箱里起不来，两个都藏就没有 shell 了"。现在不成立了 ——
+受限模式跑的是我们自装的 Niubash，在沙箱里能正常工作；再留着 `pwsh` 只是让模型在两个 shell 之间犹豫。
+
+- 去掉按会话策略的分支：只要 shell 族挂上了（⇒ 运行时可用的前提），就统一 deny `pwsh` / `pwsh_persistent`。
+- 回归改成"受限会话也隐藏 pwsh"。
+
+全量 **1,601** 条断言通过；`check-package` 62/62；schema 不变（35,350 B）。
+
 ## 0.9.2 — 2026-11-10（闸门必须带 session 解析策略）
 
 v0.9.0/0.9.1 的闸门是拿 `sandboxPolicy.resolve()` **不带参数**问的，宿主这时返回的是**默认策略**：
