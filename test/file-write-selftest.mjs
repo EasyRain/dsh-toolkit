@@ -157,6 +157,18 @@ try {
         ok('UTF-16 文件不再被当成二进制跳过', u16Replace.skipped !== true && u16Replace.matches === 1, JSON.stringify(u16Replace))
     }
 
+    console.log('== replace 的工具级回执要把 0 命中的原因说出来 ==')
+    {
+        const d = join(dir, 'notes')
+        mkdirSync(d, { recursive: true })
+        writeFileSync(join(d, 'crlf.txt'), 'a\r\nb\r\n')
+        writeFileSync(join(d, 'x.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]))
+        const tool = tools((def) => def, { resolveWorkspaceCwd: () => dir })[0]
+        const text = await tool.execute({ action: 'replace', paths: [d], pattern: 'a' + String.fromCharCode(10) + 'b', replacement: 'ab' })
+        ok('0 命中时说清「请用 edit」而不是只报 0 处', /请用 edit/.test(text), text)
+        ok('0 命中时说明二进制被跳过（不能静默）', /二进制文件，跳过/.test(text), text)
+    }
+
     console.log('== 5. effectState（失败时区分"没生效 / 已生效 / 不确定"）==')
     {
         const text = renderOpResult({ ok: false, action: 'write', path: 'x', message: 'CAS 失败' })

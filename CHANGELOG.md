@@ -4,6 +4,12 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.4.4 — 2026-11-10（审计补漏：0 命中的原因要能到达模型）
+
+- `file` 的 `replace` 工具级回执以前会把 **0 命中的文件整行丢掉** ⇒ 「二进制跳过」「多行 pattern 请用 edit」「GB18030 未命中」这些 module 层写好的提示**永远到不了模型**，模型只看到「0 个文件 / 0 处」而以为文件里真的没有。
+- 现在把 0 命中的 `message` 汇总进回执（同一原因合并、每类最多列 3 个路径）。
+- 回归：工具级 `replace` 扫目录（含 CRLF 文件 + 二进制）时，回执必须出现「请用 edit」与「二进制文件，跳过」。
+
 ## 0.4.3 — 2026-11-10（对 shell / file 新功能的审计修复）
 
 审了一遍 0.4.0–0.4.2 新加的能力（套件绿但边界没覆盖），修了 7 处：
