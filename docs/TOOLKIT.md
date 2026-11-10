@@ -44,7 +44,7 @@
 - **沙箱**：会话策略不是 `danger-full-access` 时，整条 argv 会先过 `sandbox.confine(argv, policy, signal)`，用**它的** argv 起进程；退出码非 0 且 stderr 命中 `denialSignatures` 就在回执里标 `[sandbox: file access denied under <mode> mode]`。
   **拿不到 `sandboxPolicy`/`sandbox.confine` 或 confinement 结果无效 ⇒ 直接拒绝执行（`SANDBOX_UNAVAILABLE`，命令根本没跑）**，绝不"先放过去再说"。`danger-full-access` 下不包装（与宿主同权限）。
   **Windows + 受限模式**：系统 Git Bash 起不来（MSYS 建信号管道被沙箱拒绝，`0xC0000142`）⇒ 自动**复用已安装 dsh-ops 的受限运行时**，再走 `sandbox.confine`。两条后端按顺序探测：
-  **① Niubash**（dsh-ops 0.5+ 的默认 Windows 载荷，`lib/niubash/runtime.js` 的 `niubashCandidates` + `verifiedNiubash`；首次使用会在 `DSH_HOME/dsh-ops/shells/niubash-prepared/<hash>` 准备一份副本，之后复用）；
+  **① Niubash**（dsh-ops 0.5+ 的默认 Windows 载荷，`lib/niubash/runtime.js` 的 `niubashCandidates` + `verifiedNiubash`）。注意它**跑过一次就会改自己的目录**（`winuxcmd/dev`），而 0.5.2 的整树校验只认压缩包里的目录 ⇒ 整树失败时我们退到**只校验 `niu.exe` 的 sha256**（等于收据里的 `executableSha256`），哈希不符照样拒绝；
   **② 钉住的 MSYS + IPC 补丁**（0.4.x 的 legacy 路径，`lib/bash-ipc.js` 的 `confinedBash()`，需要在 `~/.dsh/dsh-ops/bash-ipc/` 复制约 174 MB）。
   **依赖已安装的 `dsh-ops` 包**（MIT；只在运行时借用，不把载荷复制进本仓库）；两条都拿不到 ⇒ 明确 `EXECUTOR_UNAVAILABLE`，绝不放行。
 - **上游动态（2026-11）**：dsh-ops 的 PR #668 正把 Windows 默认后端从 PortableGit/MSYS 换成 **Niubash**（原生 Windows shell，约 33 MB 归档），届时其 MSYS IPC 载荷可能移除。本工具受限模式目前借用 `dsh-ops/lib/bash-ipc.js` + `@dsh-ops/bash-win32-x64`；上游切换后会**明确报错**（`EXECUTOR_UNAVAILABLE`），不会静默放行，需要跟进适配 Niubash。

@@ -4,6 +4,14 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.5.1 — 2026-11-10（Niubash 用满一次就被判"不可信"）
+
+实战发现：Niubash **第一次执行**会自己在载荷目录里建 `winuxcmd/dev`（运行时目录），而 dsh-ops 0.5.2 的整树校验只认"压缩包里出现过的目录" ⇒ 此后 `verifiedNiubash` **永远失败**（收据里的 `winuxcmd/dev` 只在 prepare 阶段创建，npm 包不带空目录）。表现就是：受限模式第一次能用，之后 `EXECUTOR_UNAVAILABLE`。
+
+- 现在整树校验失败时，退一步只校验**真正被执行的东西**：`niu.exe` 的 sha256 必须等于收据里的 `executableSha256`（`integrity: 'executable'`），其余运行时目录不参与判定。安全性不打折——跑的就是这个 exe，哈希对不上照样拒绝并退回 MSYS。
+- 新增两条回归：整树失败但 exe 哈希对得上 ⇒ 仍用 Niubash；exe 被改过 ⇒ 拒绝该载荷（退回 MSYS）。
+- `ops-runtime-selftest` 的假包按真实布局生成了 `provenance.json` 与 `winuxcmd/dev/shm`，覆盖"跑过一次"的状态。
+
 ## 0.5.0 — 2026-11-10（对齐 dsh-ops 0.5.x：Niubash 后端 + 宿主 DSH 环境 + 参数级错误码）
 
 读了 dsh-ops 0.5.2 的 bash 实现（Niubash 已取代 PortGit 成为默认 Windows 载荷），把值得我们学的四点落地：

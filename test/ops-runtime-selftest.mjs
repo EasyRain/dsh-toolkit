@@ -7,6 +7,7 @@
  *
  * 跑法：node test/ops-runtime-selftest.mjs
  */
+import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -30,12 +31,19 @@ function fakeOps(name, { niubash = false, msys = false, niubashThrows = false } 
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'dsh-ops', version: '0.5.2' }))
     if (niubash) {
         const exe = join(dir, 'niu.exe')
-        writeFileSync(exe, 'stub')
+        // 固定内容，便于把 sha256 写进收据
+        writeFileSync(exe, 'stub-exe')
+        writeFileSync(join(dir, 'provenance.json'), JSON.stringify({
+            backend: 'niubash', upstreamVersion: '1.5.0', executable: 'niu.exe',
+            executableSha256: createHash('sha256').update('stub-exe').digest('hex'),
+        }))
+        // 模拟"跑过一次"：niubash 自己建的运行时目录
+        mkdirSync(join(dir, 'winuxcmd', 'dev', 'shm'), { recursive: true })
         mkdirSync(join(dir, 'lib', 'niubash'), { recursive: true })
         writeFileSync(join(dir, 'lib', 'niubash', 'runtime.js'), `
 export function niubashCandidates() { return [{ file: ${JSON.stringify(exe)}, source: 'bundled' }] }
 export function verifiedNiubash(file) {
-${niubashThrows ? "  throw new Error('EXECUTOR_UNAVAILABLE: Niubash payload verification failed')" : ''}
+${niubashThrows ? "  throw new Error('EXECUTOR_UNAVAILABLE: Niubash payload verification failed: Unknown Niubash directory: winuxcmd/dev')" : ''}
   return { file, env: { NIU_ROOT: ${JSON.stringify(join(dir, 'winuxcmd'))} } }
 }
 `)
@@ -63,10 +71,16 @@ try {
 
     console.log('== 2. Niubash 校验失败 ⇒ 退回 MSYS ==')
     {
-        const dir = fakeOps('fallback', { niubash: true, msys: true, niubashThrows: true })
+        // 整树校验失败、但 exe 哈希与收据一致 ⇒ 退到"只认 exe"（跑过一次之后才会这样）
+        const dir = fakeOps('exec-only', { niubash: true, niubashThrows: true })
         const runtime = await resolveOpsConfinedBash({ opsRoot: dir, platform: 'win32' })
-        ok('backend=msys', runtime?.backend === 'msys', JSON.stringify(runtime))
-        ok('返回钉住 MSYS 的 bash.exe', /bash\.exe$/i.test(runtime?.file ?? ''), JSON.stringify(runtime?.file))
+        ok('整树校验失败但 exe 哈希对得上 ⇒ 仍用 Niubash', runtime?.backend === 'niubash' && runtime?.integrity === 'executable', JSON.stringify(runtime))
+
+        // 整树校验失败 + exe 被改过 ⇒ 不许放行，退回 MSYS
+        const dir2 = fakeOps('tampered', { niubash: true, msys: true, niubashThrows: true })
+        writeFileSync(join(dir2, 'niu.exe'), 'tampered-exe')
+        const runtime2 = await resolveOpsConfinedBash({ opsRoot: dir2, platform: 'win32' })
+        ok('exe 哈希不匹配 ⇒ 拒绝该载荷（退回 MSYS）', runtime2?.backend === 'msys', JSON.stringify(runtime2))
     }
 
     console.log('== 3. 只有 MSYS（0.4.x 安装）==')
