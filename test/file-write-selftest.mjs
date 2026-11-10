@@ -139,6 +139,24 @@ try {
         ok('CR-only 文件按 CR 风格写回', crEdited.ok === true && readFileSync(crOnly, 'utf8') === 'a\rB\rc', JSON.stringify(readFileSync(crOnly, 'utf8')))
     }
 
+    console.log('== replace 的换行/行号/编码边界 ==')
+    {
+        const cr = join(dir, 'replace-cr.txt')
+        writeFileSync(cr, 'x\ry\rz\r')
+        const crReplace = replaceInFileOp({ path: cr, pattern: 'z', replacement: 'Z' })
+        ok('CR-only 文件行号按 CR 数（第 3 行不是第 1 行）', crReplace.matches === 1 && crReplace.lines[0] === 3, JSON.stringify(crReplace))
+
+        const crlf = join(dir, 'replace-crlf.txt')
+        writeFileSync(crlf, 'a\r\nb\r\n')
+        const miss = replaceInFileOp({ path: crlf, pattern: 'a\nb' })
+        ok('多行 pattern 在 CRLF 文件未命中时指向 edit', miss.matches === 0 && /请用 edit/.test(miss.message ?? ''), JSON.stringify(miss))
+
+        const u16 = join(dir, 'replace-u16.txt')
+        writeFileSync(u16, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('hello', 'utf16le')]))
+        const u16Replace = replaceInFileOp({ path: u16, pattern: 'hello', dryRun: true })
+        ok('UTF-16 文件不再被当成二进制跳过', u16Replace.skipped !== true && u16Replace.matches === 1, JSON.stringify(u16Replace))
+    }
+
     console.log('== 5. effectState（失败时区分"没生效 / 已生效 / 不确定"）==')
     {
         const text = renderOpResult({ ok: false, action: 'write', path: 'x', message: 'CAS 失败' })

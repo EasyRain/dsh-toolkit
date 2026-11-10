@@ -63,11 +63,11 @@
 - **紧凑格式**：同一父目录的多个文件共享一行 `[Base: "D:\dir"]`，块头是 `=== FILE: "a.txt" (Lines 1-40 of 200) ===`；
   行号是 `N| `（不补空格），正文做**可逆转义**（`\` → `\\`、tab → `\t`、控制字符 → `\uXXXX`）—— 防止文件内容伪造出额外的行号/标题。
 - **总预算**：单文件默认 1 MB，**一次调用合计 2 MB**（多文件共享；用尽后剩余文件直接报"预算用尽，分批读"）。
-- **diff**：`path` + `content`（拟写入的完整内容）⇒ **只读预览**：按行做公共前缀/后缀修剪，只输出**一个替换 hunk**（不做最小 diff）；带 old/new sha256 与行数，`offset`/`limit`/`context` 分页（默认 100 行 / 3 行上下文）；BOM、CRLF、尾换行差异会单独指出；**永不写盘**。与 `table_diff`（两表按键比对）和 `ast_edit` 的 staged 预览不是一回事。
+- **diff**：`path` + `content`（拟写入的完整内容）⇒ **只读预览**：按行做公共前缀/后缀修剪，只输出**一个替换 hunk**（不做最小 diff）；带 old/new sha256 与行数，`offset`/`limit`/`context` 分页（默认 100 行 / 3 行上下文）；**永不写盘**。三条边界（审计后补）：二进制文件**拒绝**（看内容用 `read` 的 hex）、旧文件超 **8 MB** 不做整文件 diff、**非 UTF-8 文件会明确警告「write 只写 UTF-8，落盘会整体重编码」**；换行差异按「文件 X → 写入 Y」具体说明。与 `table_diff`（两表按键比对）和 `ast_edit` 的 staged 预览不是一回事。
 - **write**：整文件写 UTF-8（`bom:true` 加 BOM）；**原子写**（同目录临时文件 + rename）。
 - **schema 契约（严格 provider）**：`required` 在任何层级都必须是**字符串数组**；`toJsonSchema` 会递归把属性里的布尔 `required: true` 上提到所属对象并删除，绝不泄露给 provider（否则中转站/new-api 会回 `Invalid schema for function 'file': true is not of type "array"`，整个会话 INVALID_REQUEST）。
 - **edit**：若干 `{oldText,newText}`，**每段必须唯一命中、且互不重叠**，否则整单失败（不做部分应用）；**换行无关匹配**：文件与 `oldText` 先归一到 LF（CRLF / 孤立 CR 都算换行），命中后 `newText` 按文件主 EOL 写回；按原编码写回、保留 BOM。**GB18030 无法编码 ⇒ 明确拒绝**（先转 UTF-8，别悄悄改编码）。`dryRun` 只对 `replace`/`remove` 生效；`edit`/`write` 带 `dryRun:true` 会**明确拒绝**（之前会静默写盘）—— 预览改走 `action:"diff"`。
-- **replace**：`pattern`（**字面**文本，不是正则）+ `replacement`，对 `path` / `paths`（文件 / 目录 / glob）批量替换；**默认只预览**（`dryRun:true`，报每个文件几处、在哪几行），要真写必须 `dryRun:false`。二进制跳过；GB18030 文件命中会拒绝（先转 UTF-8）；一次最多扫 50 个文件。
+- **replace**：`pattern`（**字面**文本，不是正则）+ `replacement`，对 `path` / `paths`（文件 / 目录 / glob）批量替换；**默认只预览**（`dryRun:true`，报每个文件几处、在哪几行），要真写必须 `dryRun:false`。二进制跳过（UTF-16 按 BOM 识别、不会被误跳）；GB18030 文件命中会拒绝（先转 UTF-8）；一次最多扫 50 个文件。**行号按 CRLF / CR / LF 都算换行**；多行 `pattern` 在 CRLF 文件未命中时会提示改用 `edit`（那里是换行无关匹配）。
 - **CAS**：`expectedRevision` 传上次回执里的 sha256，或 `"absent"` 表示"只新建" ⇒ 防"读到旧内容再覆盖"。冲突时回执带**当前** revision，照着重读再改。
 - **copy / move**：`to` 与 `path` 同一基准；默认不覆盖（`overwrite:true` 才覆盖）；move 跨卷失败会退化成"复制 + 删源"并在回执里说明。
 - **remove**：默认只**预览**（`dryRun`）；真删要 `confirm:true`，目录还要 `recursive:true`；盘根/家目录直接拒绝。

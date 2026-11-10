@@ -63,7 +63,7 @@ try {
         const crlf = join(dir, 'crlf.txt')
         writeFileSync(crlf, 'a\r\nb\r\n')
         const crlfText = await run({ path: crlf, content: 'a\nb\n' })
-        ok('CRLF 文件：行相同但字节不同', /字节不同/.test(crlfText), crlfText)
+        ok('CRLF 文件：指出换行符差异（文件 CRLF → 写入 LF）', /换行符不同/.test(crlfText) && /CRLF/.test(crlfText), crlfText)
 
         const tail = join(dir, 'tail.txt')
         writeFileSync(tail, 'a\nb\n')
@@ -72,7 +72,35 @@ try {
         const crOnly = join(dir, 'cr-only.txt')
         writeFileSync(crOnly, 'a' + String.fromCharCode(13) + 'b' + String.fromCharCode(13))
         const crText = await run({ path: crOnly, content: 'a' + String.fromCharCode(10) + 'b' + String.fromCharCode(10) })
-        ok('CR-only 与 LF 视为行内容相同（字节不同）', /字节不同/.test(crText) && !/@@/.test(crText), crText)
+        ok('CR-only 与 LF 视为行内容相同（只差换行符）', /换行符不同/.test(crText) && !/@@/.test(crText), crText)
+    }
+
+    console.log('== 4b. 审计补的边界：二进制 / 超大 / offset 越界 / 编码 ==')
+    {
+        const png = join(dir, 'x.png')
+        writeFileSync(png, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from([0x00, 0x01, 0x02])]))
+        const bin = await run({ path: png, content: 'x' })
+        ok('二进制文件拒绝做行 diff（不给乱码 hunk）', /二进制文件/.test(bin) && !/@@/.test(bin), bin)
+
+        const gbk = join(dir, 'gbk.txt')
+        writeFileSync(gbk, Buffer.from([0xd6, 0xd0, 0xce, 0xc4, 0x0a]))
+        const gbkText = await run({ path: gbk, content: '中文' + String.fromCharCode(10) })
+        ok('GB18030 文件提示会整体重编码', /encoding=gb18030/.test(gbkText) && /整体重编码/.test(gbkText), gbkText)
+
+        const u16 = join(dir, 'u16.txt')
+        writeFileSync(u16, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('a' + String.fromCharCode(10), 'utf16le')]))
+        const u16Text = await run({ path: u16, content: 'a' + String.fromCharCode(10) })
+        ok('UTF-16 文件提示会整体重编码', /encoding=utf16le/.test(u16Text) && /整体重编码/.test(u16Text), u16Text)
+
+        const t = join(dir, 'off.txt')
+        writeFileSync(t, 'a' + String.fromCharCode(10) + 'b' + String.fromCharCode(10))
+        const off = await run({ path: t, content: 'A' + String.fromCharCode(10) + 'B' + String.fromCharCode(10), offset: 999 })
+        ok('offset 越界明确提示（不是静默空页）', /超出 hunk/.test(off), off)
+
+        const dirTarget = await run({ path: dir, content: 'x' })
+        ok('目录明确拒绝', /是目录/.test(dirTarget), dirTarget)
+        const noPath = diffFileOp({ content: 'x' })
+        ok('缺 path 明确拒绝', noPath.ok === false && /要给 path/.test(noPath.error), JSON.stringify(noPath))
     }
 
     console.log('== 5. 错误与只读 ==')

@@ -4,6 +4,32 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.4.3 — 2026-11-10（对 shell / file 新功能的审计修复）
+
+审了一遍 0.4.0–0.4.2 新加的能力（套件绿但边界没覆盖），修了 7 处：
+
+**`file diff`**
+- **二进制文件不再输出乱码 hunk**：先看 BOM 再判 NUL，命中就拒绝并指向 `file read` 的 hex 预览。
+- **旧文件加 8 MB 上限**（以前整文件读入内存，大文件会吃掉内存）。
+- **编码差异说清**：GB18030 / UTF-16 文件即使“行内容相同”，也明说「write 只写 UTF-8，落盘会整体重编码」，不再笼统归因于“换行符或 BOM 差异”。
+- 换行差异改为具体描述（文件 LF → 写入 CRLF），offset 越界/missing path/目录 给明确报错（不再静默返回空页）。
+
+**`file` 的 `replace`**
+- 行号按编辑器语义数（CRLF / CR / LF 都算换行，CR-only 文件不再全算第 1 行）。
+- UTF-16 文件不再被当成二进制跳过（BOM 优先于 NUL 判定）。
+- 多行 pattern 在 CRLF 文件未命中时，明确指向 `edit`（换行无关匹配）。
+
+**`bash`**
+- **执行器结算失败（`handle.done` reject）不再产生 unhandled rejection**（Node 15+ 会直接抛，可能打崩宿主）；现在归成结构化的 `SPAWN_FAILED` 并清掉定时器/轮询。
+- 前台 `runBash` 抛异常时**也会收尾已登记的 job**（以前会永远挂在「后台任务」里）。
+
+**审批**
+- 当前模式不在可升级集合时 **拒绝**（不再因 `undefined < n` 比较而静默放行）。
+- `sandbox_permissions` 与当前模式相同时**不再强制 `justification`**（对齐 ops 语义，不再拒绝合法调用）。
+- 审批期间被取消 ⇒ 转成 `CANCELLED` 错误码，不再泄露 DOMException。
+
+回归：diff 新增 6 条边界断言、replace 新增 3 条、bash 新增 3 条；全量 **1,535** 条通过。
+
 ## 0.4.2 — 2026-11-09（edit 换行无关匹配）
 
 - **`file` 的 `edit` 现在换行无关**：匹配前把文件和 `oldText` 都归一到 LF（CRLF / 孤立 CR 都算换行），命中后按映射回原文件偏移，`newText` 再按文件**主 EOL** 写回。解决了“`read` 展示的是归一化后的行，模型照着写的 `oldText` 却因文件是 CRLF 而匹配不上”的报错（`oldText 在文件里找不到`）。

@@ -491,8 +491,14 @@ console.log('== 22. 逐次升级审批（sandbox_permissions）==')
     try { await approveEscalation(shifting, { sandbox_permissions: 'danger-full-access', justification: 'x' }, exec) } catch (error) { failed = error.message }
     ok('审批期间策略变化 ⇒ AUTHORITY_CHANGED', /^AUTHORITY_CHANGED/.test(failed), failed)
     failed = ''
-    try { await approveEscalation(ctx({ request: async () => 'allowed-once' }), { sandbox_permissions: 'workspace-write' }, exec) } catch (error) { failed = error.message }
-    ok('缺 justification ⇒ APPROVAL_INVALID', /^APPROVAL_INVALID/.test(failed), failed)
+    try { await approveEscalation(ctx({ request: async () => 'allowed-once' }), { sandbox_permissions: 'danger-full-access' }, exec) } catch (error) { failed = error.message }
+    ok('更宽模式缺 justification ⇒ APPROVAL_INVALID', /^APPROVAL_INVALID/.test(failed), failed)
+    const sameMode = await approveEscalation(ctx({ request: async () => { throw new Error('不该走审批') } }), { sandbox_permissions: 'workspace-write' }, exec)
+    ok('同模式不需要 justification 也不走审批', sameMode.mode === 'workspace-write')
+    failed = ''
+    const oddMode = { get: (name) => name === 'sandboxPolicy' ? { resolve: () => ({ mode: 'some-future-mode', workspaceRoot: 'D:/ws' }) } : name === 'approval' ? { request: async () => 'allowed-once' } : undefined }
+    try { await approveEscalation(oddMode, { sandbox_permissions: 'danger-full-access', justification: 'x' }, exec) } catch (error) { failed = error.message }
+    ok('未知当前模式 ⇒ APPROVAL_INVALID（不静默放行）', /^APPROVAL_INVALID/.test(failed), failed)
 
     const dir8 = mkdtempSync(join(tmpdir(), 'tk bash escalate-'))
     try {
@@ -576,6 +582,15 @@ console.log('== 25. 宿主 subprocess 路径（spawn/终止/输出交给宿主�
     setTimeout(() => controller.abort(), 80)
     const ra = await runBash('sleep', { subprocess: hostAbort, signal: controller.signal })
     ok('取消回执带 cancelled', ra.ok === false && /cancelled/i.test(ra.error ?? ''), JSON.stringify({ error: ra.error }))
+
+    // 执行器内部异常（宿主句柄 done 直接 reject）：不能把 job 永远挂在列表里，也不能把异常抛给上层。
+    const rejecting = { spawn() { return { collected: { stdout: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) }, stderr: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) } }, done: Promise.reject(new Error('boom')), terminate() {} } } }
+    const removedIds = []
+    const jobsBroken = { start() { return 'job-broken' }, remove(id) { removedIds.push(id) } }
+    const defBroken = bashModule.tools((tool) => tool, { subprocess: rejecting, getJobs: () => jobsBroken, resolveWorkspaceCwd: () => tmpdir() })[0]
+    const brokenText = await defBroken.execute({ command: 'x', description: 'broken' })
+    ok('执行器内部异常 ⇒ SPAWN_FAILED 而不是抛给上层', /\[failure: SPAWN_FAILED/.test(brokenText), brokenText.slice(-160))
+    ok('异常路径也会把已登记的 job 清掉', removedIds.includes('job-broken'), JSON.stringify(removedIds))
 
     let liveText = 'partial\n'
     const liveReader = { readFrom(from) { return { text: liveText.slice(from), nextOffset: liveText.length, lossy: false } } }
