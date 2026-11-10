@@ -4,6 +4,22 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.9.0 — 2026-11-10（写操作也遵守沙箱策略）
+
+**修一个真缺口**：`bash` 会过 `sandbox.confine`（真正被关住），但 `file` / `ast_edit` / `checkpoint_restore` / `download`
+是直接 `node:fs` 写盘，宿主自己的 fs 围栏（`@deepseek-ai/dsh-fs-sandbox`）管不到插件代码 —— 在 workspace-write 会话里
+它们**能写到工作区之外**（实测：先在 `C:\Users\…` 写成功、再删成功，而同路径用 bash 写被拒）。
+
+- 新增 `lib/guard.js`：与宿主同口径的 `writableRoots(policy)`（`workspaceRoot` + `additionalWritableRoots` + `/tmp` + `os.tmpdir()`），
+  `read-only` 拒一切写，`workspace-write` 拒工作区外的目标，`danger-full-access` 不拦；拿不到策略服务则放行（由宿主兜底）。
+  拒绝抛 `SandboxDeniedError`（`code = FS_SANDBOX_DENIED`），消息带宿主同款 `[sandbox: file access denied under <mode> mode]` 标记。
+- 接线：`file`（write/edit/copy/move/remove/mkdir，以及 replace 真正落盘时按收集到的具体文件）、`ast_edit`（apply，预览不受限）、
+  `checkpoint_restore`（显式 cwd 在碰快照**之前**就拦）、`download`（start 的 `to`）。
+- 目标规范化用“父目录 realpath + 文件名”：新建文件不会因 8.3 短名/长名差异被误判成“不在可写根内”。
+- 新增 `test/guard-selftest.mjs`（19 条）：判定规则、拒绝形状、`file`/`checkpoint` 接线、read-only 与 danger 边界。
+
+全量 **1,598** 条断言通过；`check-package` 62/62；schema 不变（35,350 B）。
+
 ## 0.8.3 — 2026-11-10（精简回执：不再回显 bash 路径与沙箱模式）
 
 运行时固定之后，回执里有三块信息变成了噪声：

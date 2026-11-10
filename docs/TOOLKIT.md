@@ -57,6 +57,15 @@
 - **已知限制**：无 PTY（`top`、进度条会乱）；Git 安装目录就是 MSYS 的 `/`（所以在 `C:\Program Files\Git` 里 `pwd` 输出 `/` 是**正确**的）；传给 Windows exe 的 `/xxx` 会被 MSYS 转换，必要时设 `MSYS_NO_PATHCONV=1`。
 - **长脚本别硬塞进 `command`**：先用 `write` 落成 `.sh`，再 `bash path/to/script.sh` —— 少一层引号解析，中文/反斜杠/heredoc 都更稳。
 
+## 沙箱与写操作（跨族）
+
+`bash` 会把整条 argv 过 `sandbox.confine`；其它族的写操作是插件自己 `node:fs`，宿主围栏管不到，所以用 `lib/guard.js` 补齐：
+
+- 规则与宿主 `writableRoots(policy)` 同口径：`read-only` 拒一切写；`workspace-write` 只允许 `workspaceRoot`、`additionalWritableRoots`、`/tmp`、`os.tmpdir()` 之内；`danger-full-access` 不拦；**拿不到策略服务则放行**（由宿主兜底）。
+- 覆盖：`file`（write/edit/copy/move/remove/mkdir，以及 `replace` 真正落盘时按**收集到的具体文件**判，所以 glob 也绕不过去）、`ast_edit`（apply 落盘前；预览不受限）、`checkpoint` 的 `restore` 动作（显式 `cwd` 在碰快照**之前**就拦）、`download`（start 的 `to`）。
+- 拒绝时的回执：抛 `FS_SANDBOX_DENIED`，消息里带 `[sandbox: file access denied under <mode> mode]` 与目标路径，**不会产生副作用**。
+- 目标规范化用“父目录 realpath + 文件名”：新建文件不会因为 8.3 短名（`EASYRA~1`）与长名差异被误判成“不在可写根内”。
+
 ## file
 
 `file` —— 一个工具十个动作：`read` / `stat` / **`diff`** / `write` / `edit` / `replace` / `copy` / `move` / `remove` / `mkdir`（不传 `action` 时按 `read`）。
