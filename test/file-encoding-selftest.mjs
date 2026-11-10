@@ -127,6 +127,18 @@ try {
         ok('无替换字符', decoded.replacements === 0, String(decoded.replacements))
     }
 
+    console.log('== 7c. 采样盲区：英文表头 + 后面的 CJK ==')
+    {
+        const head = Buffer.from('log header line\n'.repeat(4200))       // > 64 KB 纯 ASCII
+        const unit = FIXTURES.big5
+        const tail = Buffer.alloc(unit.length * 4000)
+        for (let i = 0; i < 4000; i += 1) unit.copy(tail, i * unit.length)
+        const mixed = Buffer.concat([head, tail])
+        const decoded = read.decodeBuffer(mixed)
+        ok('ASCII 表头 + Big5 正文 ⇒ 仍判为 big5（不按样本瞎猜）', decoded.encoding === 'big5', decoded.encoding)
+        ok('尾部内容正确', decoded.text.endsWith('中文測試'), decoded.text.slice(-6))
+    }
+
     console.log('== 8. 未知编码名要明确报错（不静默回退）==')
     {
         let error = null
