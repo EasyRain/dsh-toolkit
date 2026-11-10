@@ -19,8 +19,18 @@ const { createLocalSubprocess } = await import('./support/local-subprocess.mjs')
 const localSubprocess = createLocalSubprocess()
 const { findBash, renderResult, apply, DEFAULTS } = bashModule
 // 生产走宿主 subprocess；自测用同契约的本地替身（spawn/终止/输出/spill 行为一致）。
-const runBash = (command, options = {}) => bashModule.runBash(command, { subprocess: localSubprocess, ...options })
-const tools = (define, options = {}) => bashModule.tools(define, { subprocess: localSubprocess, ...options })
+// 自测里 bash 指向**系统 Git Bash**（`DSH_TOOLKIT_BASH` 是显式调试覆盖；生产只认自装的 Niubash）。
+const TEST_BASH = findBash()
+const runBash = (command, options = {}) => bashModule.runBash(command, {
+    subprocess: localSubprocess,
+    ...(TEST_BASH === null ? {} : { bashPath: TEST_BASH }),
+    ...options,
+})
+const tools = (define, options = {}) => bashModule.tools(define, {
+    subprocess: localSubprocess,
+    ...(TEST_BASH === null ? {} : { bashPath: TEST_BASH }),
+    ...options,
+})
 
 let failures = 0
 
@@ -518,7 +528,7 @@ console.log('== 22. 逐次升级审批（sandbox_permissions）==')
 
 console.log('== 22b. 参数错误码 / 未起进程无副作用 / DSH 环境注入 ==')
 {
-    const def = bashModule.tools((tool) => tool, { subprocess: localSubprocess, resolveWorkspaceCwd: () => tmpdir() })[0]
+    const def = tools((tool) => tool, { resolveWorkspaceCwd: () => tmpdir() })[0]
     const both = await def.execute({ command: 'echo x', script_path: '/tmp/x.sh', description: 'both' })
     ok('command + script_path 同时给 ⇒ INVALID_BASH_ARGUMENT', /\[failure: INVALID_BASH_ARGUMENT; effects: none; retry: after-input-change\]/.test(both), both.slice(-160))
 
@@ -535,7 +545,7 @@ console.log('== 22b. 参数错误码 / 未起进程无副作用 / DSH 环境注�
     const envCtx = { get: (name) => name === 'shellEnv'
         ? { collect: () => ({ DSH_HOME: 'C:/dsh-home', DSH_SHELL: '1', DSH_SESSION_ID: 'sess-123' }) }
         : (name === 'sandboxPolicy' ? { resolve: () => ({ mode: 'danger-full-access' }) } : undefined) }
-    const defEnv = bashModule.tools((tool) => tool, { subprocess: localSubprocess, resolveWorkspaceCwd: () => tmpdir(), getCtx: () => envCtx })[0]
+    const defEnv = tools((tool) => tool, { resolveWorkspaceCwd: () => tmpdir(), getCtx: () => envCtx })[0]
     const envText = await defEnv.execute({ command: 'printf "%s|%s" "$DSH_SHELL" "$DSH_SESSION_ID"', description: 'env' })
     ok('宿主 shellEnv 的 DSH_* 注入子进程', /1\|sess-123/.test(envText), envText.slice(0, 200))
 }
@@ -611,7 +621,7 @@ console.log('== 25. 宿主 subprocess 路径（spawn/终止/输出交给宿主�
     const rejecting = { spawn() { return { collected: { stdout: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) }, stderr: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) } }, done: Promise.reject(new Error('boom')), terminate() {} } } }
     const removedIds = []
     const jobsBroken = { start() { return 'job-broken' }, remove(id) { removedIds.push(id) } }
-    const defBroken = bashModule.tools((tool) => tool, { subprocess: rejecting, getJobs: () => jobsBroken, resolveWorkspaceCwd: () => tmpdir() })[0]
+    const defBroken = bashModule.tools((tool) => tool, { subprocess: rejecting, getJobs: () => jobsBroken, resolveWorkspaceCwd: () => tmpdir(), ...(TEST_BASH === null ? {} : { bashPath: TEST_BASH }) })[0]
     const brokenText = await defBroken.execute({ command: 'x', description: 'broken' })
     ok('执行器内部异常 ⇒ SPAWN_FAILED 而不是抛给上层', /\[failure: SPAWN_FAILED/.test(brokenText), brokenText.slice(-160))
     ok('异常路径也会把已登记的 job 清掉', removedIds.includes('job-broken'), JSON.stringify(removedIds))

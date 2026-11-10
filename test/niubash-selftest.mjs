@@ -149,10 +149,12 @@ try {
     const niuRoot = niubashRoot(env)
     ok('装了运行时 ⇒ pickBash 选 Niubash', typeof picked === 'string' && picked.startsWith(niuRoot) && /niu\.exe$/i.test(picked), String(picked))
     ok('系统 Git Bash 仍可找到（findBash 不受影响）', typeof findBash === 'function')
-    const forcedGit = pickBash({ ...env, DSH_TOOLKIT_BASH_BACKEND: 'git' })
-    ok('DSH_TOOLKIT_BASH_BACKEND=git ⇒ 强制回 Git Bash', forcedGit === null || !/niu\.exe$/i.test(forcedGit), String(forcedGit))
-    const noRuntime = pickBash({ ...process.env, LOCALAPPDATA: join(root, 'empty-appdata') })
-    ok('没装运行时 ⇒ 回落到系统 bash（或 null）', noRuntime === null || !/niu\.exe$/i.test(noRuntime), String(noRuntime))
+    const explicit = pickBash({ ...env, DSH_TOOLKIT_BASH: join(root, 'explicit.sh') })
+    ok('DSH_TOOLKIT_BASH 是显式覆盖（文件不存在则不生效）', explicit === null || /niu\.exe$/i.test(explicit), String(explicit))
+    const noRuntime = pickBash({ ...process.env, LOCALAPPDATA: join(root, 'empty-appdata'), DSH_TOOLKIT_BASH: '' })
+    ok('没装运行时 ⇒ null（**不再**回落到系统 bash）', noRuntime === null, String(noRuntime))
+    const diag = findBash({ ...process.env, DSH_TOOLKIT_BASH: '' })
+    ok('findBash 仍可用于诊断（不参与选择）', diag === null || !/niu\.exe$/i.test(diag), String(diag))
 }
 
 console.log('== 5. ops-runtime：我们自己的运行时优先于 dsh-ops ==')

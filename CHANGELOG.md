@@ -4,6 +4,23 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.8.0 — 2026-11-10（统一 shell：只用我们自己的运行时）
+
+**行为变化（有意的破坏性调整）**：`bash` 不再使用系统 Git Bash，也不再借用 dsh-ops 的运行时。
+只认**我们自己的 Niubash**（`%LOCALAPPDATA%\dsh-toolkit
+iubash\<版本>`，或离线包自带的
+`runtime/niubash/<版本>`）；**没装就不启用**，设置页下载完成后才能用。
+
+- 为什么：不同机器上的 bash 可能是 Git Bash / WSL / 各种魔改版，工具链与行为都不同；
+  按"受限用 A、非受限用 B"更糟。统一到同一份已验证的运行时，两种模式体验才一致。
+- `pickBash()` 只剩两个来源：显式 `DSH_TOOLKIT_BASH`（调试覆盖）→ 我们的 Niubash。
+  `DSH_TOOLKIT_BASH_BACKEND` 已移除。`findBash()` 仅保留为诊断（"系统 Git Bash 在哪"），不参与选择。
+- 没有运行时 ⇒ `EXECUTOR_UNAVAILABLE`（`effects: none`），回执直接提示去设置页下载。
+- 清理：不再借用 dsh-ops（删掉探测与解析代码、以及过时的 `ops-runtime-selftest`）；
+  `lib/shell/ops-runtime.js` 现在只回答"我们的运行时在哪"。
+- 设置页：shell 行只显示运行时状态与「安装受限运行时」按钮；开关在有运行时前禁用（探测中不闪）。
+- 自测：`bash` 相关用例通过 `bashPath` 显式指向系统 bash（调试覆盖），生产路径不受影响。
+
 ## 0.7.0 — 2026-11-10（运行时可选安装，装好后两种模式统一）
 
 按使用者的口径校正：**运行时是可选安装项**（跟以前装 Git Bash 一样，用户点按钮才装），
