@@ -148,6 +148,27 @@ try {
         ok('空文件不抛错（走 UTF-8 快路径）', read.decodeBuffer(Buffer.alloc(0)).encoding === 'utf8')
     }
 
+    console.log('== 9. 截断读取（maxBytes 小于文件）仍按文件开头判断编码 ==')
+    {
+        const big5File = join(root, 'trunc-big5.txt')
+        const unit = FIXTURES.big5
+        const many = Buffer.alloc(unit.length * 4000)
+        for (let i = 0; i < 4000; i += 1) unit.copy(many, i * unit.length)
+        writeFileSync(big5File, many)
+        const cut = read.readOne(big5File, { maxBytes: 200 })
+        ok('Big5 大文件 + maxBytes=200 ⇒ 仍报 big5（不按 200 字节猜）', cut.encoding === 'big5', cut.encoding)
+        ok('截断标记仍然正确', cut.truncated === true, String(cut.truncated))
+
+        const mixedFile = join(root, 'trunc-mixed.txt')
+        writeFileSync(mixedFile, Buffer.concat([Buffer.from('log header line\n'.repeat(4200)), many]))
+        const mixedCut = read.readOne(mixedFile, { maxBytes: 200 })
+        ok('ASCII 表头 + Big5 正文 + 小窗口 ⇒ 仍报 big5', mixedCut.encoding === 'big5', mixedCut.encoding)
+
+        const utf8File = join(root, 'trunc-utf8.txt')
+        writeFileSync(utf8File, '中文测试\n'.repeat(2000), 'utf8')
+        ok('UTF-8 大文件 + 小窗口 ⇒ 仍是 utf8', read.readOne(utf8File, { maxBytes: 200 }).encoding === 'utf8')
+    }
+
     console.log('== 8. 未知编码名要明确报错（不静默回退）==')
     {
         let error = null

@@ -4,6 +4,19 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.10.4 — 2026-11-10（截断读取也报对方编码，不按前缀瞎猜）
+
+真机验证时发现：`file read` 带小 `maxBytes` 读一个大 Big5 文件，回执写 `encoding=utf8`——
+因为它只解码了展示用的那 200 字节（恰好是 ASCII 前缀），把"前缀是合法 UTF-8"当成了"整份是 UTF-8"。
+
+- **判断编码与展示窗口解耦**：被 `maxBytes` 截断时，另读文件开头最多 **64 KB** 作为探测样本；
+  若这段恰好是纯 ASCII（英文表头）而文件更长，再读最多 4 MB，避免"按前缀瞎猜"。
+- UTF-8 的快路径也改成**在探测样本上验证**，而不是在被截断的展示字节上验证。
+- 回归：Big5 大文件 + `maxBytes:200` ⇒ 仍报 `big5`；UTF-8 大文件 + 小窗口 ⇒ 仍报 `utf8`；
+  `truncated` 标记不受影响。
+
+全量 **1,638** 条断言通过；`check-package` 62/62；schema 不变（35,636 B）。
+
 ## 0.10.3 — 2026-11-10（小样本不喊歧义；Node 与 Electron 的 ICU 有差异）
 
 真机上一条 7 字节的 Shift_JIS 一直报「候选难以区分」，而同一份代码在 Node 里不报。查清了：
