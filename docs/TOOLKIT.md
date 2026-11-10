@@ -43,12 +43,12 @@
 - **后台任务**：`background:true` ⇒ 交给宿主 `jobs` 服务（`kind:'bash'`、`label`、`owner`、stdout/stderr 读取器），立刻回 `jobId`；之后用宿主的 `job_output` 读输出、`job_kill` 停。宿主没有 `jobs` 服务时**明确报错**（`ok=false`），不静默降级成前台。
 - **沙箱**：会话策略不是 `danger-full-access` 时，整条 argv 会先过 `sandbox.confine(argv, policy, signal)`，用**它的** argv 起进程；退出码非 0 且 stderr 命中 `denialSignatures` 就在回执里标 `[sandbox: file access denied under <mode> mode]`。
   **拿不到 `sandboxPolicy`/`sandbox.confine` 或 confinement 结果无效 ⇒ 直接拒绝执行（`SANDBOX_UNAVAILABLE`，命令根本没跑）**，绝不"先放过去再说"。`danger-full-access` 下不包装（与宿主同权限）。
-  **Windows + 受限模式**：系统 Git Bash 起不来（MSYS 建信号管道被沙箱拒绝，`0xC0000142`）⇒ 自动**复用已安装 dsh-ops 的受限运行时**，再走 `sandbox.confine`。两条后端按顺序探测：
-  **① Niubash**（dsh-ops 0.5+ 的默认 Windows 载荷，`lib/niubash/runtime.js` 的 `niubashCandidates` + `verifiedNiubash`）。注意它**跑过一次就会改自己的目录**（`winuxcmd/dev`），而 0.5.2 的整树校验只认压缩包里的目录 ⇒ 整树失败时我们退到**只校验 `niu.exe` 的 sha256**（等于收据里的 `executableSha256`），哈希不符照样拒绝；
-  **② 钉住的 MSYS + IPC 补丁**（0.4.x 的 legacy 路径，`lib/bash-ipc.js` 的 `confinedBash()`，需要在 `~/.dsh/dsh-ops/bash-ipc/` 复制约 174 MB）。
-  **依赖已安装的 `dsh-ops` 包**（MIT；只在运行时借用，不把载荷复制进本仓库）；两条都拿不到 ⇒ 明确 `EXECUTOR_UNAVAILABLE`，绝不放行。
-- **上游动态（2026-11）**：dsh-ops 的 PR #668 正把 Windows 默认后端从 PortableGit/MSYS 换成 **Niubash**（原生 Windows shell，约 33 MB 归档），届时其 MSYS IPC 载荷可能移除。本工具受限模式目前借用 `dsh-ops/lib/bash-ipc.js` + `@dsh-ops/bash-win32-x64`；上游切换后会**明确报错**（`EXECUTOR_UNAVAILABLE`），不会静默放行，需要跟进适配 Niubash。
-- **与 `ops_bash` 的差异**（明确写出来，别假设等价）：**没有 promoted 语义**（不会把正在跑的前台任务提升为后台，只有 foreground/background 两种）、**没有 persistent/PTY 会话**、失败回执是 `error` 文本而不是结构化 `failure.code/effectState/retry`。沙箱接法照 ops（`sandboxPolicy.resolve` + `sandbox.confine`），但不换用 ops 的 confined Bash IPC 运行时。工具本身的执行语义（`-c`、杀整棵树、UTF-8 locale、argv 直传）与 ops 一致。
+  **Windows + 受限模式**：系统 Git Bash 起不来（MSYS 建信号管道被沙箱拒绝，`0xC0000142`）⇒ 需要一个**能在沙箱里跑的运行时**，再走 `sandbox.confine`。按顺序探测：
+  **① 自己装的 Niubash**（`%LOCALAPPDATA%\dsh-toolkit\niubash\1.5.0`）—— **不需要 dsh-ops**，这是默认路径：设置页「Bash 执行器」下的“安装受限运行时”（约 33 MB，GitHub 源，`/dsh-toolkit/bash/runtime/install`）一键装；归档 sha256 钉死，解包自带 tar.gz 读取（只写普通文件/目录/硬链接，拒绝绝对路径 / `..` / 符号链接），装完把 exe 的 size+mtime+sha256 记进标记，之后不再重复哈希 33 MB；
+  **② 借 dsh-ops**（装了才有意义，纯属省一次下载）：0.5.x 的 Niubash（`lib/niubash/runtime.js`）→ 0.4.x 的钉住 MSYS + IPC 补丁（`lib/bash-ipc.js` 的 `confinedBash()`）；
+  **③ 都没有** ⇒ 明确 `EXECUTOR_UNAVAILABLE`（提示去装运行时，或切 danger-full-access），**绝不放行**。
+- **与 dsh-ops 的关系**：**不依赖它** —— 受限运行时是我们自己装的 Niubash（默认路径）；装了 dsh-ops 只是省一次下载（借它的 Niubash 或 0.4.x 的钉住 MSYS）。两个插件都启用时别同时开 shell 族（功能重叠）。
+- **与 `ops_bash` 的差异**：**没有 persistent/PTY 会话**（交互式 `top`、进度条这类不该由本工具承担），也**不做 workspace 预处理**（ACL/临时目录归宿主）；其余能力已对齐：`sandbox_permissions` 逐次升级审批、超时晋升为后台（`promoted`）、前台任务登记为宿主 job、`failure{code,effectState,retry,nextAction}`、会话销毁时收尾活任务、terminal 卡片契约（真实退出码/信号名）。
 - **找不到 bash** ⇒ 明确报错并提示装 Git for Windows；**绝不**自动下载。
 - **没装 bash 时**：设置 → 工具集里「Bash 执行器」那行会给两个按钮 —— **从国内镜像安装**（npmmirror，直连，实测 60 MB / 2.7 s）、**从 GitHub 安装**（需要你自己能连 GitHub）。装的是**用户级 PortableGit**（`%LOCALAPPDATA%\dsh-toolkit\git`）：不需要管理员、不改系统 Git、装完删掉 60 MB 安装包；**没装好之前这个开关是禁用的**（工具仍注册，调用会返回明确错误，而不是静默失败）。
 - **隐藏宿主 pwsh**（照 ops 的 "shell replacement"）：Windows 上开启本族、且 `findBash()` 找到 bash 时，按会话 `tools.restrict({ deny: ['pwsh','pwsh_persistent'] })` 把宿主自带的 PowerShell 工具藏起来 —— 只隐藏不卸载，会话销毁/插件卸载自动还原；**bash 不可用时不隐藏**（否则会话没有任何 shell）。POSIX 本来就只有 bash，不动。

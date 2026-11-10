@@ -4,6 +4,22 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.6.0 — 2026-11-10（不依赖 dsh-ops：自带受限运行时）
+
+**方向修正**：dsh-toolkit 是独立插件，**没装 dsh-ops 才是常态**。此前 Windows 受限模式（workspace-write / read-only）完全依赖 dsh-ops 的受限运行时，等于把"最常见的场景"绑在一个可选包上。
+
+- **新增 `lib/shell/niubash.js`**：自己下载 + 校验 + 解压 **Niubash 1.5.0**（原生 Windows shell，能直接在宿主沙箱里跑）。
+  - 归档 **sha256 钉死**（`da28cdc4…`，32,931,587 B），校验不过直接丢弃、不安装；
+  - 解包器是自带的 tar.gz 读取（不 spawn `tar`）：**只写普通文件/目录/硬链接**，拒绝绝对路径、`..`、符号链接，硬链接目标也做越界检查；
+  - 装到用户级 `%LOCALAPPDATA%\dsh-toolkit
+iubash.5.0`，先解到 staging 再原子换上去；
+  - 校验结果写进 `.dsh-toolkit-niubash.json`（size + mtime + sha256），**之后不再重复哈希 33 MB**；exe 变了会自动重算。
+- **解析顺序改为**：① 自己装的 Niubash → ② 借 dsh-ops（Niubash / 钉住 MSYS）→ ③ 都没有则 `EXECUTOR_UNAVAILABLE`（fail-closed）。② 只是"装了 dsh-ops 就省一次下载"的快捷方式。
+- **设置页**新增「安装受限运行时」按钮（`/dsh-toolkit/bash/runtime/{status,install}`，约 33 MB，GitHub 源），bash 行下显示是否就绪；`bashStatus()` 里带 `runtime` 字段。
+- 报错信息改为引导用户装运行时（不再说"去修 dsh-ops"）。
+- 真机验证：下载 + 校验 + 解包 + 运行 **3.3 s**，`niu.exe -c 'echo/uname/gawk'` 全部正常。
+- 新增 `test/niubash-selftest.mjs`（17 条）：解包、硬链接、越界/符号链接拒绝、哈希不符丢弃、标记缓存、以及"dsh-ops 不存在也能解析出运行时"。
+
 ## 0.5.1 — 2026-11-10（Niubash 用满一次就被判"不可信"）
 
 实战发现：Niubash **第一次执行**会自己在载荷目录里建 `winuxcmd/dev`（运行时目录），而 dsh-ops 0.5.2 的整树校验只认"压缩包里出现过的目录" ⇒ 此后 `verifiedNiubash` **永远失败**（收据里的 `winuxcmd/dev` 只在 prepare 阶段创建，npm 包不带空目录）。表现就是：受限模式第一次能用，之后 `EXECUTOR_UNAVAILABLE`。

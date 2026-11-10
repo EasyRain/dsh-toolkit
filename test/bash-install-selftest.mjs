@@ -155,7 +155,7 @@ console.log('== 5. 并发保护与失败可读 ==')
 
 console.log('== 6. HTTP 路由（设置页用）==')
 {
-    const { mountBashRoutes, STATUS_PATH, INSTALL_PATH } = await import('../lib/shell/routes.js')
+    const { mountBashRoutes, STATUS_PATH, INSTALL_PATH, RUNTIME_STATUS_PATH, RUNTIME_INSTALL_PATH } = await import('../lib/shell/routes.js')
     const routes = []
     const ctx = {
         inject: (_deps, callback) => callback({
@@ -165,8 +165,8 @@ console.log('== 6. HTTP 路由（设置页用）==')
         effect: (fn) => fn(),
     }
     mountBashRoutes(ctx, () => {})
-    ok('注册两条精确路由', routes.length === 2 && routes.every((route) => route.kind === 'exact'), JSON.stringify(routes.map((r) => r.path)))
-    ok('路径与客户端一致', routes.map((route) => route.path).join(',') === `${STATUS_PATH},${INSTALL_PATH}`)
+    ok('注册四条精确路由（bash 两条 + 受限运行时两条）', routes.length === 4 && routes.every((route) => route.kind === 'exact'), JSON.stringify(routes.map((r) => r.path)))
+    ok('路径与客户端一致', routes.map((route) => route.path).join(',') === `${STATUS_PATH},${INSTALL_PATH},${RUNTIME_STATUS_PATH},${RUNTIME_INSTALL_PATH}`)
 
     const call = (route, request) => {
         let status = null
