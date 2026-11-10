@@ -4,6 +4,26 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.8.3 — 2026-11-10（精简回执：不再回显 bash 路径与沙箱模式）
+
+运行时固定之后，回执里有三块信息变成了噪声：
+
+- **首行不再带 `bash=<路径>`**：shell 已经是统一的，路径只在 `includeDiagnostics: true` 的 `diagnostics: bash=…` 里给。
+- **不再每次都写 `[sandbox: <mode> / <enforcement>]`**：受限与非受限已经是同一套行为；只有真的被拒（`denied`）或运行器坏掉（`runnerFailed`）时才提示。
+- **没有内容的流整段不出现**：以前空输出会写 `(empty)`，现在 stdout/stderr 哪个为空就不打哪一段（两者都空就只剩首行与末行的 `[exit code: N]`）。
+
+现在的形状：
+
+```text
+ok=true  exitCode=0  timedOut=false  truncated=false  123ms
+--- stdout ---
+内容1
+内容2
+[exit code: 0]
+```
+
+末行的 `[exit code: N]` / `[killed by signal: X]` 保持不变（宿主 terminal 卡片靠它解析）。
+
 ## 0.8.2 — 2026-11-10（安装入口：国内加速源 + 去术语化文案）
 
 - **两个下载源**：`mirror`（GitHub 反代 `ghfast.top`，失败自动试 `gh-proxy.com`）与 `github`（官方）。

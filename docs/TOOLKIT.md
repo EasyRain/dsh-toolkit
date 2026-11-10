@@ -38,10 +38,10 @@
 - **可取消**（重要）：前台/后台命令**都会先登记成宿主 job**（后台任务列表里能看到，可以只停这一条而不结束会话）；正常结束自动移除，到点未完成则留在列表里（promoted）。宿主的 `exec.signal`（点「停止」/结束会话）会走两路杀进程树 + **主动关管道**（防止凭据管理器/ssh 搵着写端让 `close` 不触发），回执带 `[aborted]` + `failure: CANCELLED`。git 这类可能等凭据的命令固定 `GIT_TERMINAL_PROMPT=0`、`GCM_INTERACTIVE=never`：需要凭据时**直接失败**，不会弹窗/挂住。
 - **落盘上限**：spill 预算（默认 **64 MB**，可用 `maxSpillBytes` 调低）随 spawn 一起交给宿主；溢出时宿主标记 lossy，回执带 `truncated` 与 `spillPath`。
 - **失败契约**（照 ops）：失败时回执追加 `[failure: CODE; effects: none|unknown; retry: never|after-input-change|after-config-change] nextAction`；常见 CODE：`EXECUTOR_UNAVAILABLE` / `SANDBOX_UNAVAILABLE` / `SANDBOX_DENIED` / `TIMEOUT` / `EXIT_NONZERO` / `CANCELLED` / `SPAWN_FAILED`。
-- **输出**：默认上限 2 MB，超出置 `truncated:true`，并把**完整输出落盘**（回执给 `spillPath`，用 `file read` 分段看）；stdout/stderr 原样回显，不做转义，`ok` 只在退出码 0 且未超时时为真。
+- **输出**：默认上限 2 MB，超出置 `truncated:true`，并把**完整输出落盘**（回执给 `spillPath`，用 `file read` 分段看）；stdout/stderr 原样回显，不做转义，`ok` 只在退出码 0 且未超时时为真。**首行不带 bash 路径**（运行时已固定，只在 `includeDiagnostics` 的 `diagnostics: bash=…` 里给）；**空输出不占行**（哪一路没内容就不打那一段，也不再写 `(empty)`）；末行固定是 `[exit code: N]` 或 `[killed by signal: X]`（宿主 terminal 卡片靠它解析）。
 - **参数面（与 ops_bash 对齐）**：`command` / `script_path`（跑现成 `.sh`，与 `command` 二选一）/ `description` / `cwd` / `workdir`（`cwd` 的别名，同时给时 `cwd` 优先）/ `timeoutMs` / `graceMs`（先温和终止，等这么久再强杀整棵树，默认 250 ms）/ `includeDiagnostics`。
 - **后台任务**：`background:true` ⇒ 交给宿主 `jobs` 服务（`kind:'bash'`、`label`、`owner`、stdout/stderr 读取器），立刻回 `jobId`；之后用宿主的 `job_output` 读输出、`job_kill` 停。宿主没有 `jobs` 服务时**明确报错**（`ok=false`），不静默降级成前台。
-- **沙箱**：会话策略不是 `danger-full-access` 时，整条 argv 会先过 `sandbox.confine(argv, policy, signal)`，用**它的** argv 起进程；退出码非 0 且 stderr 命中 `denialSignatures` 就在回执里标 `[sandbox: file access denied under <mode> mode]`。
+- **沙箱**：会话策略不是 `danger-full-access` 时，整条 argv 会先过 `sandbox.confine(argv, policy, signal)`，用**它的** argv 起进程。**正常执行不再回显模式**（受限/非受限已是同一套行为）；只有真的被拒（`[sandbox: file access denied under <mode> mode]`）或运行器坏掉时才提示。
   **拿不到 `sandboxPolicy`/`sandbox.confine` 或 confinement 结果无效 ⇒ 直接拒绝执行（`SANDBOX_UNAVAILABLE`，命令根本没跑）**，绝不"先放过去再说"。`danger-full-access` 下不包装（与宿主同权限）。
   **Windows + 受限模式**：系统 Git Bash 起不来（MSYS 建信号管道被沙箱拒绝，`0xC0000142`）⇒ 需要一个**能在沙箱里跑的运行时**，再走 `sandbox.confine`。
   **只认我们自己的 Niubash**（`%LOCALAPPDATA%\dsh-toolkit\niubash\1.5.0`，或离线包自带的 `runtime/niubash/<版本>`）：设置页「Bash 执行器」下有两个安装按钮 ——「从国内加速安装」（GitHub 反代 `ghfast.top`，失败自动试 `gh-proxy.com`）与「从 GitHub 安装」（`/dsh-toolkit/bash/runtime/install`，约 33 MB）；归档 sha256 钉死，反代改一个字节就拒绝安装；

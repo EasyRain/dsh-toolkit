@@ -187,7 +187,7 @@ console.log('== 12. 文本投影 ==')
     const text = renderResult({ ok: true, exitCode: 0, stdout: 'hi\n', stderr: '', timedOut: false, truncated: false, durationMs: 81, bashPath: bash })
     ok('投影含头部与 stdout 原文', /ok=true/.test(text) && /exitCode=0/.test(text) && /--- stdout ---\nhi/.test(text))
     const bad = renderResult({ ok: false, exitCode: 127, stdout: '', stderr: 'nope\n', timedOut: false, truncated: true, durationMs: 3, bashPath: bash })
-    ok('空 stdout 标 (empty)，stderr 原样', /\(empty\)/.test(bad) && /nope/.test(bad) && /truncated/.test(bad))
+    ok('空 stdout 不再占一行（无内容就不出现），stderr 原样', !/--- stdout ---/.test(bad) && /--- stderr ---/.test(bad) && /nope/.test(bad) && /truncated/.test(bad))
     ok('默认上限是 2 MB', DEFAULTS.maxOutputBytes === 2 * 1024 * 1024)
 }
 
@@ -277,7 +277,7 @@ console.log('== 14. 与 ops 对齐的新参数（script_path / workdir / graceMs
         const plain = await def.execute({ command: 'echo hi' })
         ok('默认不打印 diagnostics', !/diagnostics:/.test(plain) && /hi/.test(plain))
         const verbose = await def.execute({ command: 'echo hi', includeDiagnostics: true })
-        ok('includeDiagnostics 时打印 cwd/timeout/grace', /diagnostics: cwd=/.test(verbose) && /graceMs=250/.test(verbose), verbose.slice(-120))
+        ok('includeDiagnostics 时打印 bash/cwd/timeout/grace', /diagnostics: bash=/.test(verbose) && /cwd=/.test(verbose) && /graceMs=250/.test(verbose), verbose.slice(-140))
     }
     finally {
         bestEffortRm(dir2)
@@ -340,7 +340,7 @@ console.log('== 16. 沙箱闸门（非完全权限必须真受限，否则拒绝
         }))
         const confinedOut = await confined.execute({ command: 'echo original-should-not-run' }, { agent: { session: {} } })
         ok('受限模式用 confinement 的 argv 执行', /confined-ok/.test(confinedOut) && !/original-should-not-run/.test(confinedOut), confinedOut.slice(0, 160))
-        ok('回执标出沙箱模式/强度', /\[sandbox: workspace-write \/ full\]/.test(confinedOut), confinedOut.slice(0, 160))
+        ok('沙箱正常执行时**不再**回显模式/强度', !/\[sandbox:/.test(confinedOut), confinedOut.slice(0, 160))
 
         const denied = define(makeCtx('workspace-write', {
             confine: async () => ({ argv: [bashPath, '-c', 'echo "blocked by sandbox" >&2; exit 1'], enforcement: 'partial', denialSignatures: ['blocked by sandbox'] }),
