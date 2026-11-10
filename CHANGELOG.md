@@ -4,6 +4,17 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.9.6 — 2026-11-10（session_export 先问权限再干活）
+
+CI 暴露出 0.9.5 新用例的环境依赖：`session_export` 的闸门放在"解析会话 / 读日志"之后，
+而 CI 里没有会话日志 ⇒ 先报 `no session logs`，根本走不到权限判断。
+
+- 把闸门提到 `execute` 最前面：**先判目标能不能写**（只读会话直接拒、工作区外按策略拒），
+  再去做会话解析与日志解码。拒绝更快，也顺带省掉无谓的读盘。
+- 这样用例在"没有任何会话日志"的机器上也能稳定验证权限判定。
+
+全量 **1,607** 条断言通过；`check-package` 62/62；schema 不变（35,350 B）。
+
 ## 0.9.5 — 2026-11-10（闸门真的接上了：apply 没把 getCtx 传下去）
 
 在真机上切到「仅查看（read-only）」实测时发现 **0.9.4 的补漏有两处没生效**，原因是接线而不是判定：
