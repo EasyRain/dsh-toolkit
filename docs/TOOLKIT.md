@@ -49,7 +49,8 @@
   **③ 都没有** ⇒ 明确 `EXECUTOR_UNAVAILABLE`（提示去装运行时，或切 danger-full-access），**绝不放行**。
 - **与 dsh-ops 的关系**：**不依赖它** —— 受限运行时是我们自己装的 Niubash（默认路径）；装了 dsh-ops 只是省一次下载（借它的 Niubash 或 0.4.x 的钉住 MSYS）。两个插件都启用时别同时开 shell 族（功能重叠）。
 - **与 `ops_bash` 的差异**：**没有 persistent/PTY 会话**（交互式 `top`、进度条这类不该由本工具承担），也**不做 workspace 预处理**（ACL/临时目录归宿主）；其余能力已对齐：`sandbox_permissions` 逐次升级审批、超时晋升为后台（`promoted`）、前台任务登记为宿主 job、`failure{code,effectState,retry,nextAction}`、会话销毁时收尾活任务、terminal 卡片契约（真实退出码/信号名）。
-- **找不到 bash** ⇒ 明确报错并提示装 Git for Windows；**绝不**自动下载。
+- **选哪个 shell**：`pickBash()` 的优先级是 **`DSH_TOOLKIT_BASH`（显式路径）> 已装的 Niubash（包内 `runtime/niubash/<版本>` → 用户级缓存）> 系统 Git Bash**。也就是说：**运行时是可选安装项，装上之后受不受限两种模式都跑它**（用户机器上的 bash 可能是 Git Bash / WSL / 魔改版，行为不一致）。想强制走系统 Git Bash：`DSH_TOOLKIT_BASH_BACKEND=git`；强制 Niubash：`=niubash`。`findBash()` 仍只回答"系统 Git Bash 在哪"（设置页/安装流程用）。
+- **找不到 bash** ⇒ 明确报错并提示装 Git for Windows（或装受限运行时）；**绝不**自动下载。
 - **没装 bash 时**：设置 → 工具集里「Bash 执行器」那行会给两个按钮 —— **从国内镜像安装**（npmmirror，直连，实测 60 MB / 2.7 s）、**从 GitHub 安装**（需要你自己能连 GitHub）。装的是**用户级 PortableGit**（`%LOCALAPPDATA%\dsh-toolkit\git`）：不需要管理员、不改系统 Git、装完删掉 60 MB 安装包；**没装好之前这个开关是禁用的**（工具仍注册，调用会返回明确错误，而不是静默失败）。
 - **隐藏宿主 pwsh**（照 ops 的 "shell replacement"）：Windows 上开启本族、且 `findBash()` 找到 bash 时，按会话 `tools.restrict({ deny: ['pwsh','pwsh_persistent'] })` 把宿主自带的 PowerShell 工具藏起来 —— 只隐藏不卸载，会话销毁/插件卸载自动还原；**bash 不可用时不隐藏**（否则会话没有任何 shell）。POSIX 本来就只有 bash，不动。
 - **已知限制**：无 PTY（`top`、进度条会乱）；Git 安装目录就是 MSYS 的 `/`（所以在 `C:\Program Files\Git` 里 `pwd` 输出 `/` 是**正确**的）；传给 Windows exe 的 `/xxx` 会被 MSYS 转换，必要时设 `MSYS_NO_PATHCONV=1`。

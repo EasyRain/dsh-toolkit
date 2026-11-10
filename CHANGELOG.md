@@ -4,6 +4,20 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.7.0 — 2026-11-10（运行时可选安装，装好后两种模式统一）
+
+按使用者的口径校正：**运行时是可选安装项**（跟以前装 Git Bash 一样，用户点按钮才装），
+但**装上之后，受不受限两种模式都用它** —— 用户机器上的 bash 可能是 Git Bash / WSL / 某个魔改版，
+行为不一致；我们自己验证过的那个 shell 才是可控的。
+
+- **不再随 npm 包发布载荷**（不做 prepack、`files` 不含 `runtime/`）：装插件时不会被塞 62 MB。
+  `runtime/niubash/<版本>` 只保留给"离线包/内网镜像"自己塞载荷用，命中就零下载。
+- **`pickBash()` 统一选 shell**：显式 `DSH_TOOLKIT_BASH` > 已装的 Niubash（包内 → 用户级缓存）> 系统 Git Bash。
+  `DSH_TOOLKIT_BASH_BACKEND=git|niubash` 可强制后端；`findBash()` 仍只回答"系统 Git Bash 在哪"（设置页/安装流程用）。
+- Niubash 的 `NIU_ROOT` / `PATH` 前缀随 spawn 注入（否则 niu 找不到自己的 winuxcmd 工具链）。
+- 设置页：Git Bash 与受限运行时**有任意一个**就能打开 shell 族开关（以前只认 Git Bash，装了 Niubash 也开不了）。
+- 回归：`pickBash` 三条（装了就用它 / 强制 git / 没装回落）、开关门禁两条。
+
 ## 0.6.1 — 2026-11-10（下载目录不能落在安装根下）
 
 CI（Ubuntu）暴露的小问题：`installNiubash` 把归档下到 `%TEMP%`，Linux 上没有 `TEMP`/`TMP` 时退化成**安装根目录**，于是"哈希不符 ⇒ 未安装"这条失败路径会留下一个空的 `niubash/1.5.0` 目录 —— 看起来像装了一半。

@@ -141,7 +141,21 @@ try {
         ok('内容被改 ⇒ 重算哈希并刷新标记', again?.sha256 !== marker.sha256, JSON.stringify({ before: marker.sha256.slice(0, 8), after: String(again?.sha256).slice(0, 8) }))
     }
 
-    console.log('== 5. ops-runtime：我们自己的运行时优先于 dsh-ops ==')
+    console.log('== 4b. pickBash：装了就统一用它（两种模式同一个 shell）==')
+{
+    const env = { ...process.env, LOCALAPPDATA: join(root, 'appdata') }
+    const { pickBash, findBash } = await import('../lib/shell/bash.js')
+    const picked = pickBash(env)
+    const niuRoot = niubashRoot(env)
+    ok('装了运行时 ⇒ pickBash 选 Niubash', typeof picked === 'string' && picked.startsWith(niuRoot) && /niu\.exe$/i.test(picked), String(picked))
+    ok('系统 Git Bash 仍可找到（findBash 不受影响）', typeof findBash === 'function')
+    const forcedGit = pickBash({ ...env, DSH_TOOLKIT_BASH_BACKEND: 'git' })
+    ok('DSH_TOOLKIT_BASH_BACKEND=git ⇒ 强制回 Git Bash', forcedGit === null || !/niu\.exe$/i.test(forcedGit), String(forcedGit))
+    const noRuntime = pickBash({ ...process.env, LOCALAPPDATA: join(root, 'empty-appdata') })
+    ok('没装运行时 ⇒ 回落到系统 bash（或 null）', noRuntime === null || !/niu\.exe$/i.test(noRuntime), String(noRuntime))
+}
+
+console.log('== 5. ops-runtime：我们自己的运行时优先于 dsh-ops ==')
     {
         const env = { ...process.env, LOCALAPPDATA: join(root, 'appdata') }
         const resolved = await resolveOpsConfinedBash({ env, platform: 'win32', opsRoot: join(root, 'no-ops-here') })
