@@ -154,6 +154,40 @@ try {
         try { guard.assertWritableStorage({ get: () => undefined }, null, '创建快照') } catch { safe = false }
         ok('拿不到策略 ⇒ 放行', safe)
     }
+    console.log('== 8. 真实入口 apply()：getCtx 有没有一路传下去 ==')
+    {
+        const session = { id: 'ro-session' }
+        const registry = () => {
+            const registered = []
+            const ctx = {
+                tools: { register: (tool) => registered.push(tool) },
+                get: () => undefined,
+                on: () => () => {},
+            }
+            return { ctx, registered }
+        }
+
+        // checkpoint：以前 apply() 把 getCtx 丢了 ⇒ 单工具 checkpoint 的 create 拦不住
+        const ckReg = registry()
+        checkpoint.apply(ckReg.ctx, { defineTool, mutationHook: false, beacon: () => {}, getCtx: () => fakeCtx('read-only') })
+        const ck = ckReg.registered.find((tool) => tool.name === 'checkpoint')
+        const ckError = ck === undefined ? new Error('checkpoint 没注册') : await denyOf(() => ck.execute({ action: 'create', note: 'ro' }, { agent: { session } }))
+        ok('apply 之后：checkpoint create 在只读下被拒', ckError instanceof guard.SandboxDeniedError, String(ckError?.message))
+
+        // download：以前 apply() 调 tools() 时没传 options ⇒ 闸门是空的
+        const download = await import('../lib/download/index.js')
+        const dlReg = registry()
+        download.apply(dlReg.ctx, defineTool, { getCtx: () => fakeCtx('read-only') })
+        const dl = dlReg.registered.find((tool) => tool.name === 'download')
+        const dlError = dl === undefined ? new Error('download 没注册') : await denyOf(() => dl.execute({ action: 'start', url: 'https://example.invalid/x.bin', to: join(root, 'x.bin') }, { agent: { session } }))
+        ok('apply 之后：download start 在只读下被拒', dlError instanceof guard.SandboxDeniedError, String(dlError?.message))
+
+        // session_export：直接走 tools()
+        const sessionTools = await import('../lib/session/index.js')
+        const exportTool = sessionTools.tools(defineTool, { getCtx: () => fakeCtx('read-only') }).find((tool) => tool.name === 'session_export')
+        const stError = exportTool === undefined ? new Error('session_export 不在工具列表里') : await denyOf(() => exportTool.execute({ to: join(root, 'export.jsonl') }, { agent: { session } }))
+        ok('session_export 在只读下被拒', stError instanceof guard.SandboxDeniedError, String(stError?.message))
+    }
 }
 finally {
     try { rmSync(root, { recursive: true, force: true }) } catch { /* Windows 偶发占用 */ }

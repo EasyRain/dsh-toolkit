@@ -4,6 +4,25 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.9.5 — 2026-11-10（闸门真的接上了：apply 没把 getCtx 传下去）
+
+在真机上切到「仅查看（read-only）」实测时发现 **0.9.4 的补漏有两处没生效**，原因是接线而不是判定：
+
+- `checkpoint.apply()` 解构参数后只把 `resolveSessionFile` / `resolveWorkspaceCwd` 传给了 `tools()`，
+  **把 `getCtx` 丢了** ⇒ 单工具 `checkpoint` 的 `create` / `restore` / `journal_restore` 闸门全空；
+- `download.apply()` 调的是 `tools(defineTool)`（**没传 options**）⇒ `download` 的 `to` 闸门也是空的。
+
+修法：两个 `apply()` 都把 `getCtx` 透传到 `tools()`。
+
+新回归走到**真实 `apply()` 入口**（而不是直接调 `tools()`）—— 这正是原来自测漏掉的一层：
+apply 里少传一个字段，判定逻辑再对也拦不住。
+
+- `apply` 之后 `checkpoint create` 在只读下被拒；
+- `apply` 之后 `download start` 在只读下被拒；
+- `session_export` 在只读下被拒。
+
+全量 **1,607** 条断言通过；`check-package` 62/62；schema 不变（35,350 B）。
+
 ## 0.9.4 — 2026-11-10（补齐 read-only 模式）
 
 宿主只有三种模式：`read-only` / `workspace-write` / `danger-full-access`。0.9.x 的闸门覆盖了后两种，
