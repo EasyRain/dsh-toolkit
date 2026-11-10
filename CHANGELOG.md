@@ -4,6 +4,20 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.5.0 — 2026-11-10（对齐 dsh-ops 0.5.x：Niubash 后端 + 宿主 DSH 环境 + 参数级错误码）
+
+读了 dsh-ops 0.5.2 的 bash 实现（Niubash 已取代 PortGit 成为默认 Windows 载荷），把值得我们学的四点落地：
+
+- **受限运行时支持 Niubash**（关键兼容）：0.5.x 起 dsh-ops 的默认后端是 **Niubash 1.5.0**，钉住的 MSYS 降级为 legacy。
+  `lib/shell/ops-runtime.js` 现在**按顺序探测**：`lib/niubash/runtime.js` 的 `niubashCandidates` + `verifiedNiubash`（首次在 `DSH_HOME/dsh-ops/shells/niubash-prepared/<hash>` 准备一份副本并复用）→ 失败再退回 `lib/bash-ipc.js` 的 `confinedBash`（0.4.x 的钉住 MSYS + IPC 补丁）→ 都没有则 `null`（调用方 fail-closed）。
+  否则一旦升级到 0.5.x，受限模式（workspace-write / read-only）会直接 `EXECUTOR_UNAVAILABLE`。
+- **注入宿主 `ctx.shellEnv`**（照 ops 的 `collect(exec)`）：子进程现在能拿到 `DSH_HOME` / `DSH_SHELL` / `DSH_SESSION_ID` / `DSH_PROFILE` 等宿主管辖变量，脚本可以识别"我在 DSH 里跑"。
+- **参数错误的独立错误码**：`command`/`script_path` 冲突、脚本不存在、空命令等**未起进程**的失败现在报 `INVALID_BASH_ARGUMENT`（`effects: none`、`retry: after-input-change`），不再混进 `SPAWN_FAILED`。
+- **`effectState` 更准**：区分"根本没起进程"（`none`）与"起了进程但结果未知"（`unknown`），照 ops 用 `process.started` 的思路。
+- 新增 `test/ops-runtime-selftest.mjs`（8 条）：用假 dsh-ops 包钉住三条分支（Niubash 优先 / 校验失败退回 MSYS / 都没有 ⇒ null / 非 win32 ⇒ null）。
+
+全量 **1,552** 条断言通过；`check-package` 62/62；schema 不变（35,350 B）。
+
 ## 0.4.5 — 2026-11-10（并发用例改成断言真不变量）
 
 CI（Windows / Node 24）上 `robustness` 的并发写用例偶发 **四个进程全被拒**（`codes=3,3,3,3`）：文件仍是原文、没有被写坏，属于**安全的**并发结局，但"恰好一个成功"必然变红。

@@ -5,7 +5,7 @@
 > 给 DSH 桌面端用的自有宿主插件：一个插件，七族 15 个工具。[中文说明 →](README.zh-CN.md)
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-36%20suites%20passing-brightgreen.svg)](#development)
+[![tests](https://img.shields.io/badge/tests-37%20suites%20passing-brightgreen.svg)](#development)
 
 ## What it is for
 
@@ -73,7 +73,7 @@ node scripts/test-changed.mjs --rebaseline   # record the baseline after a full 
 node test/ast-edit-selftest.mjs         # needs @ast-grep/napi; resolves it from the source tree or a profile copy
 node test/diff-engine-selftest.mjs
 node test/checkpoint-guards-selftest.mjs
-# 36 *-selftest.mjs suites in total — every one should print ALL PASS
+# 37 *-selftest.mjs suites in total — every one should print ALL PASS
 # full run with a verifiable total (for shared/published surfaces, or when wrapping up):
 #   node test/run-all.mjs   ->  TOTAL: 31 files, ~1150 passed, 0 failed, 0 non-zero exit
 # **Parallel by default** (2–8 workers scaled to the core count; each suite uses its own mkdtemp sandbox):

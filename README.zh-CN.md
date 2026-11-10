@@ -5,7 +5,7 @@
 > A host-side plugin for the DSH desktop app. [English →](README.md)
 
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-36%20suites%20passing-brightgreen.svg)](#开发)
+[![tests](https://img.shields.io/badge/tests-37%20suites%20passing-brightgreen.svg)](#开发)
 
 ## 它解决什么
 
@@ -70,7 +70,7 @@ node scripts/test-changed.mjs --rebaseline   # 全量绿了之后记录基线（
 node test/ast-edit-selftest.mjs         # 需要 @ast-grep/napi（源树或 profile 副本里都能找到）
 node test/diff-engine-selftest.mjs
 node test/checkpoint-guards-selftest.mjs
-# 共 36 份 *-selftest.mjs，全部应打印 ALL PASS
+# 共 37 份 *-selftest.mjs，全部应打印 ALL PASS
 # 全量并给出**可核对的总数**（改到公共面/发布面、或收尾时跑）：
 #   node test/run-all.mjs   ->  TOTAL: 31 files, ~1150 passed, 0 failed, 0 non-zero exit
 #   **默认并发**（按核数自适应 2–8 路；每份各自 mkdtemp 沙盒 ⇒ 互不干扰）：32 核机器上 31 s（串行 138 s）。
@@ -84,7 +84,7 @@ node test/checkpoint-guards-selftest.mjs
 
 自测**不依赖宿主**：会话日志 / checkpoint / 表 diff / 自研 diff 引擎都是纯 `node:` 实现，可离线跑。
 
-**平台**：**Windows 36 份全绿（0 failed）**；Linux 在 31 份时复跑过（**1205 条断言**，WSL2 Ubuntu 26.04.1 + Node 22.20），
+**平台**：**Windows 37 份全绿（0 failed）**；Linux 在 31 份时复跑过（**1205 条断言**，WSL2 Ubuntu 26.04.1 + Node 22.20），
 新增的 `bash` 族在 Linux 用 `/bin/bash`、自测会自动跳过 Windows 专属断言，但**尚未在新版本上复跑** —— 差值全部来自**平台感知的分支**
 （符号链接、只读注入、有没有本机会话日志）。**macOS 仍未验证**。
 首次真 Linux 验证抓到的都是"把 Windows 的性质当成通用真理"的测试（`taskkill` / `env.TEMP` / `env.USERPROFILE` /

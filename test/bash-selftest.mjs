@@ -516,6 +516,30 @@ console.log('== 22. 逐次升级审批（sandbox_permissions）==')
     finally { bestEffortRm(dir8) }
 }
 
+console.log('== 22b. 参数错误码 / 未起进程无副作用 / DSH 环境注入 ==')
+{
+    const def = bashModule.tools((tool) => tool, { subprocess: localSubprocess, resolveWorkspaceCwd: () => tmpdir() })[0]
+    const both = await def.execute({ command: 'echo x', script_path: '/tmp/x.sh', description: 'both' })
+    ok('command + script_path 同时给 ⇒ INVALID_BASH_ARGUMENT', /\[failure: INVALID_BASH_ARGUMENT; effects: none; retry: after-input-change\]/.test(both), both.slice(-160))
+
+    const missing = await def.execute({ command: '   ', description: 'empty' })
+    ok('空命令 ⇒ INVALID_BASH_ARGUMENT（且 effects=none）', /INVALID_BASH_ARGUMENT/.test(missing) && /effects: none/.test(missing), missing.slice(-140))
+
+    const noScript = await def.execute({ script_path: '/definitely/not/here.sh', description: 'noscript' })
+    ok('脚本不存在 ⇒ INVALID_BASH_ARGUMENT', /INVALID_BASH_ARGUMENT/.test(noScript), noScript.slice(-140))
+
+    const died = await def.execute({ command: 'exit 9', description: 'nonzero' })
+    ok('起了进程后非零退出 ⇒ effects=unknown（可能有副作用）', /EXIT_NONZERO; effects: unknown/.test(died), died.slice(-120))
+
+    // 宿主 shellEnv.collect 的 DSH_* 要真的进到子进程
+    const envCtx = { get: (name) => name === 'shellEnv'
+        ? { collect: () => ({ DSH_HOME: 'C:/dsh-home', DSH_SHELL: '1', DSH_SESSION_ID: 'sess-123' }) }
+        : (name === 'sandboxPolicy' ? { resolve: () => ({ mode: 'danger-full-access' }) } : undefined) }
+    const defEnv = bashModule.tools((tool) => tool, { subprocess: localSubprocess, resolveWorkspaceCwd: () => tmpdir(), getCtx: () => envCtx })[0]
+    const envText = await defEnv.execute({ command: 'printf "%s|%s" "$DSH_SHELL" "$DSH_SESSION_ID"', description: 'env' })
+    ok('宿主 shellEnv 的 DSH_* 注入子进程', /1\|sess-123/.test(envText), envText.slice(0, 200))
+}
+
 console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
 {
     const dir9 = mkdtempSync(join(tmpdir(), 'tk bash dispose-'))

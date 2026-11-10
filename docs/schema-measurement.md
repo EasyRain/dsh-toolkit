@@ -28,6 +28,7 @@
   - **`file` 新增 `replace` 动作（同日）**：`file` 3,341 → **3,788 B（+13.4%）**，全量 33,146 → **33,593 B（+1.3%）**；
     参数面 +3（`pattern` / `replacement` / `dryRun`），换掉的是"批量字面替换必须自己写脚本"。
   - **严格 provider 契约修**：`required` 递归归一，`ast` 8,531 -> **8,528 B**、`file` 4,479 -> **4,475 B**，全量 **35,350 B**（纯收敛，没有新增能力）。
+  - **对齐 dsh-ops 0.5.x**：Niubash 后端探测、DSH_* 环境注入、`INVALID_BASH_ARGUMENT` —— 都是行为改动，schema 不变（**35,350 B**），按需文档 68,138 -> **68,476 B**。
   - **审计修复**：只改行为与文案，schema 不变（**35,350 B**）；按需文档 67,708 -> **68,138 B**。
   - **`file` 新增 diff（同日）**：`file` 3,969 -> **4,479 B（+510）**，全量 34,847 -> **35,357 B（+1.5%）**；
     换来的能力是宿主没有的"改前预览"（单 hunk + 分页 + 双哈希）。
@@ -87,7 +88,7 @@
   | 紧凑字节 | **35,350 B** | 本文件/`docs/schema-baseline.json` 的口径 |
   | `bytes / 4` | ≈8,838 tok | 对中文高估 |
   | 真 tokenizer | **6,921 tok**（上次会话族扩展时的实测；DeepSeek 官方 `tokenizer.json`，换分词器会不同） | 口径可替换：作者本机用维护者工作区的 `schema-cost.mjs`。**注意**：那个脚本原先硬列 6 个模块、**漏了 `download` 一族**（口径少一个工具、4,531 tok 是那时的数），现在改成从**插件入口的注册面**取。**趋势**：6,583 → 瘦身后 6,429 → 加 `text_mode` 6,475 → 加 `diff` 动作 6,515 → 改名并把 diff 挪到 `ast_search` **6,552** → 会话族扩展（scope/where/fields）**6,921** → 加 bash（本次未重测真分词器，按字节增量估 ≈+261 tok） |
-- **按需成本另计**：`docs/TOOLKIT.md` **68,138 B**（基线口径；最近一次实测同值 —— 改一次文档就会变，`docs/schema-current.json` 的 `onDemand.bytes` 是最近一次实测）—— 只有某会话真的请教（`toolkit_help`）才付这份钱。
+- **按需成本另计**：`docs/TOOLKIT.md` **68,476 B**（基线口径；最近一次实测同值 —— 改一次文档就会变，`docs/schema-current.json` 的 `onDemand.bytes` 是最近一次实测）—— 只有某会话真的请教（`toolkit_help`）才付这份钱。
   **要写小抄、长例子、踩坑清单，请放这里，不要塞进 schema。**
 - **组件/家族小计**：`ast` 8,528 B、`table` 6,252 B、`session` 5,368 B、`download` 3,762 B、`checkpoint` 3,721 B、
   `file` 4,475 B、`shell` 2,116 B、`help` 1,128 B（同 `docs/schema-baseline.json`）。最重单件现在是 `table_diff` 4,584 B（其后 `ast_edit` 4,485 B）。
