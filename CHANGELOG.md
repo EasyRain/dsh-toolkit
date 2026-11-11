@@ -4,6 +4,20 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.10.7 — 2026-11-11（设置页文案不再写 "Git Bash"）
+
+运行时早就换成自装的 Niubash（0.8.0 起），但设置页「Bash 执行器」下面那行说明还写着
+「bash（Git Bash：POSIX 管道/引号…）」，工具描述里也还有 `(Git Bash on Windows)`。
+
+- 设置页与配置 schema 的族说明改成 **`bash（POSIX 管道/引号；超时杀整棵进程树）`**（中英同步）；
+- 工具描述改成 `on Windows it uses the bash runtime you installed`；
+- `README` / `README.zh-CN` / `docs/TOOLKIT.md` 里"用系统 Git Bash 跑"的说法一并改正
+  （保留"系统 Git Bash 不参与选择"这类**事实性**说明，它们是对的）。
+
+schema：`shell` 2,116 → **2,185 B**，全量 **35,636 → 35,705 B**。
+
+全量 **1,646** 条断言通过；`check-package` 62/62。
+
 ## 0.10.6 — 2026-11-10（无 BOM 的 UTF-16 不再被当成二进制）
 
 Windows 上有些工具会写**没有 BOM 的 UTF-16**（尤其 UTF-16LE）。以前这类文件在 `file read` 里

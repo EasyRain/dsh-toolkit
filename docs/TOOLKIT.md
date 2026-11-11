@@ -14,14 +14,14 @@
 | "以前那次会话里怎么定的 / 两个会话差在哪" | `session_read`（给 `pattern`）/ `session_diff` |
 | "两张表/两个包/两份导出有什么不同"（词表、语术、配置、CSV/SQLite） | `table_diff`（先 `table_peek` 看它被读成了什么） |
 | "改动前先存一份、改坏了要回滚" | `checkpoint action:"create"` → `checkpoint action:"diff"` → `checkpoint action:"restore"` |
-| "要跑 POSIX 管道 / 引号老被 PowerShell 吃掉" | `bash`（Git Bash；非交互、超时杀整棵进程树） |
+| "要跑 POSIX 管道 / 引号老被 PowerShell 吃掉" | `bash`（自装的 bash 运行时；非交互、超时杀整棵进程树） |
 | "文件可能是 GBK/GB18030、要一次读多段、要 CAS 写入" | `file`（read / write / edit / copy / move / remove / mkdir / stat） |
 
 通用原则：**先用只读工具看清楚，再动写工具**；写工具一律先预览。
 
 ## shell
 
-`bash` —— 用**系统 Git Bash** 跑一行 POSIX 命令，拿回退出码、stdout、stderr（分开）。这是内核 0.2.2 移除 `ops_bash` 之后的替代：**不依赖 dsh-ops**、**不下载任何东西**（ops 那 392 MB 的 PortableGit 就是这么来的）。
+`bash` —— 用**本插件自己安装的 bash 运行时（Windows 上是 Niubash）**跑一行 POSIX 命令，拿回退出码、stdout、stderr（分开）。这是内核 0.2.2 移除 `ops_bash` 之后的替代：**不依赖 dsh-ops**；运行时是**可选安装项**（设置页一键下载，约 33 MB），不随插件包分发。
 
 - **什么时候用它**：文本管道（`grep`/`sed`/`awk`/`sort`/`uniq`/`tr`）、通配、以及**引号会被 PowerShell 弄坏**的命令行。
   注册表/服务/ACL/计划任务/WMI ⇒ 走 `powershell.exe -NoProfile -Command "..."`（Windows 上宿主 `pwsh` 工具已被本族隐藏），别在 bash 里绕。
