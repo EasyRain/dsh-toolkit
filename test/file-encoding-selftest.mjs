@@ -158,6 +158,9 @@ try {
         const cut = read.readOne(big5File, { maxBytes: 200 })
         ok('Big5 大文件 + maxBytes=200 ⇒ 仍报 big5（不按 200 字节猜）', cut.encoding === 'big5', cut.encoding)
         ok('截断标记仍然正确', cut.truncated === true, String(cut.truncated))
+        // 回归：正文必须来自**展示窗口**，不能把 64 KB 探测样本当成内容（实测曾返回全部 4000 行）
+        ok('只返回展示窗口内的行（不泄露探测样本）', cut.lines.length > 0 && cut.lines.length < 100, String(cut.lines.length))
+        ok('stat.lines 与展示窗口一致', cut.stat.lines === cut.lines.length, String(cut.stat.lines))
 
         const mixedFile = join(root, 'trunc-mixed.txt')
         writeFileSync(mixedFile, Buffer.concat([Buffer.from('log header line\n'.repeat(4200)), many]))

@@ -4,6 +4,27 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.10.9 — 2026-11-11（审计 v0.9.0–0.10.8 的改动，修 5 个问题）
+
+把这一段的 diff 逐块过了一遍（含真机复现），找到并修掉：
+
+1. **截断读取会把 64 KB 探测样本当成正文**（最严重）。`maxBytes: 200` 读一个 36 KB 的 Big5 文件，
+   返回了**全部 4000 行**、`stat.lines` 也是 4000 —— 因为选中编码后用 `chosen.text`（探测样本的解码结果）
+   当返回值。现在正文一律来自 `body`（展示窗口），并新增「只返回展示窗口内的行」回归。
+2. **`copy` 的闸门误判源路径**。写操作闸门对 `[path, to]` 同时判，`copy` 从工作区外**读**进来是合法读,
+   却被当成越界拒绝。现在 `copy` 只判目标，`move`（会删源）判两侧，其余动作只判 `path`。
+3. **`checkpoint prune` 没接闸门**：只读会话里删快照（删用户数据）是放行的。现在走 `assertWritableStorage`。
+4. **进程级副作用在家族开关反复重装时重复挂载**：`mountJobCleanup` 与 `mountHostShellHiding` 每次
+   `applyAll` 都新挂一对监听器（`ctx.on('agent/disposed')` 等），越积越多。现在用模块级标志只挂一次。
+5. **探测读的短读没按实际字节数截断**：`readSync` 在慢盘/网络盘可能只返回一部分，缓冲区尾部是全 0，
+   `isAsciiOnly()` 会误判、甚至被 `sniffUtf16WithoutBom` 当成 UTF-16。现在按实际读取长度切片。
+
+顺带清掉 `lib/index.js` 里一段过时的注释（"用系统 Git for Windows，不下载任何东西"）。
+
+新增 5 条回归（展示窗口行数、`stat.lines` 一致性、copy/move 两侧语义、prune 只读拒绝）。
+
+全量 **1,654** 条断言通过；`check-package` 62/62；schema 不变（35,810 B）。
+
 ## 0.10.8 — 2026-11-11（借鉴 dsh-ops 0.5.4：revision 改流式哈希）
 
 对照 dsh-ops 0.5.4 的改动逐条过了一遍，**值得借鉴的**是这两条：

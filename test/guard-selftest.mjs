@@ -154,6 +154,28 @@ try {
         try { guard.assertWritableStorage({ get: () => undefined }, null, '创建快照') } catch { safe = false }
         ok('拿不到策略 ⇒ 放行', safe)
     }
+    console.log('== 7e. copy 只判目标、move 判两侧（源是读）==')
+    {
+        const outsideFile = join(outsideDir, 'tk-guard-src.txt')
+        writeFileSync(outsideFile, 'from outside\n')
+        // 工作区外 → 工作区内：copy 是合法读，必须放行
+        const copied = await denyOf(() => fileTool.execute({ action: 'copy', path: outsideFile, to: join(workspace, 'imported.txt') }))
+        ok('copy 从工作区外读进工作区 ⇒ 放行', copied === null || /已存在|覆盖/.test(String(copied.message)), String(copied?.message))
+        // 反向：工作区外作为目标 ⇒ 拒绝
+        const copiedOut = await denyOf(() => fileTool.execute({ action: 'copy', path: join(workspace, 'imported.txt'), to: join(outsideDir, 'tk-guard-dst.txt') }))
+        ok('copy 写到工作区外 ⇒ 拒绝', copiedOut instanceof guard.SandboxDeniedError, String(copiedOut?.message))
+        // move 会删源 ⇒ 工作区外的源也要拒
+        const moved = await denyOf(() => fileTool.execute({ action: 'move', path: outsideFile, to: join(workspace, 'moved.txt') }))
+        ok('move 从工作区外搬走（等于删源）⇒ 拒绝', moved instanceof guard.SandboxDeniedError, String(moved?.message))
+    }
+
+    console.log('== 7f. checkpoint prune 也是写（删用户数据）==')
+    {
+        const ck = checkpoint.tools(defineTool, { getCtx: () => fakeCtx('read-only') })[0]
+        const denied = await denyOf(() => ck.execute({ action: 'prune', keep: 1 }, { agent: { session: { id: 'ro' } } }))
+        ok('只读会话 ⇒ prune 被拒', denied instanceof guard.SandboxDeniedError, String(denied?.message))
+    }
+
     console.log('== 8. 真实入口 apply()：getCtx 有没有一路传下去 ==')
     {
         const session = { id: 'ro-session' }
