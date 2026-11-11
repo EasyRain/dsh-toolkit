@@ -4,6 +4,32 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.10.8 — 2026-11-11（借鉴 dsh-ops 0.5.4：revision 改流式哈希）
+
+对照 dsh-ops 0.5.4 的改动逐条过了一遍，**值得借鉴的**是这两条：
+
+- **`stat` / `copy` / `move` / `remove` 的 sha256 改成流式计算**（对应 ops：「no longer impose the 32 MiB
+  whole-content buffer limit」）。我们之前是 `readFileSync` 整份读再哈希 ⇒ `stat` 一个 2 GB 文件会先分配 2 GB。
+  现在固定 1 MB 缓冲循环读，内存恒定、无大小上限：实测 **64 MB 文件 35 ms、RSS 仅 +1.8 MB**。
+  这条同时覆盖 CAS 校验（`expectedRevision`）用的同一个 `currentRevision()`。
+- **工具描述补一句后台指引**（对应 ops：「Bash guidance requires background jobs for long-running/daemon
+  starts and notes that `job_kill` terminates the job's process tree」）：`Long-running or daemon starts belong
+  in run_in_background (job_kill ends that job's whole process tree)`。
+
+**看过但不采纳**的：
+
+- 「Niubash 选择阶段不再哈希载荷」—— 我们 0.10.x 起就只读一个 `.dsh-toolkit-niubash.json` 标记
+  （size+mtime+sha256），本来就不哈希（0.05 ms/次），ops 是刚从"每次哈希 893 MiB"改过来。
+- 「准备副本写到 DSH_HOME、禁止 shell 改自己的目录」—— 我们的载荷在用户级目录、标记只认 `niu.exe` 的
+  size+mtime，shell 往 `winuxcmd/dev` 写东西不会让校验失效（0.5.1 就是踩了这个坑后改的），不需要再复制一份。
+- 「prepared 版本退役 / cache reclaim / 多 profile pin 冲突」—— 我们只有一个固定版本目录，没有多 pin。
+- 「官方 read/glob/grep 与 OPS 替代工具互斥声明」—— 我们不替换宿主工具，没有 `MODE_REPLACEMENT` 冲突。
+- PTC / batch guidance / 预设注册那一整套 —— 与我们的定位无关。
+
+schema：`shell` 2,185 → **2,290 B**，全量 **35,705 → 35,810 B**。
+
+全量 **1,648** 条断言通过；`check-package` 62/62。
+
 ## 0.10.7 — 2026-11-11（设置页文案不再写 "Git Bash"）
 
 运行时早就换成自装的 Niubash（0.8.0 起），但设置页「Bash 执行器」下面那行说明还写着

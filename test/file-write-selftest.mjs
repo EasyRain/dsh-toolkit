@@ -9,11 +9,11 @@
  *
  * 跑法：node test/file-write-selftest.mjs
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const { writeFileOp, editFileOp, copyFileOp, moveFileOp, removeFileOp, mkdirOp, statOp, currentRevision, replaceInFileOp, renderOpResult } = await import('../lib/file/write.js')
+const { writeFileOp, editFileOp, copyFileOp, moveFileOp, removeFileOp, mkdirOp, statOp, currentRevision, replaceInFileOp, renderOpResult, sha256 } = await import('../lib/file/write.js')
 const { tools } = await import('../lib/file/index.js')
 
 let failures = 0
@@ -72,6 +72,20 @@ try {
     writeFileSync(gbk, Buffer.from([0xc4, 0xe3, 0xba, 0xc3, 0x0a]))
     const gbkEdit = editFileOp({ path: gbk, edits: [{ oldText: '你好', newText: '您好' }] })
     ok('GB18030 拒绝编辑（不悄悄改编码）', gbkEdit.ok === false && /gb18030/i.test(gbkEdit.message), String(gbkEdit.message))
+
+    console.log('== 2c. revision 分块流式：大文件不整份读进内存 ==')
+    {
+        // 8 MB 文件：结果必须与"整份读 + 哈希"一致，且不抛错
+        const big = join(dir, 'big-revision.bin')
+        const chunk = Buffer.alloc(1024 * 1024, 0x5a)
+        const fd = openSync(big, 'w')
+        for (let i = 0; i < 8; i += 1) writeSync(fd, chunk, 0, chunk.length)
+        closeSync(fd)
+        const streamed = currentRevision(big)
+        const whole = sha256(readFileSync(big))
+        ok('流式 revision 与整份哈希一致', streamed === whole, `${streamed} vs ${whole}`)
+        ok('stat 也走同一条路径（revision 一致）', statOp({ path: big }).revision === whole)
+    }
 
     console.log('== 3. copy / move / remove / mkdir / stat ==')
     const src = join(dir, 'src.txt')
