@@ -4,6 +4,24 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.12 — 2026-11-14（用"存活 waiter"抑制完成通知，而不是消费读）
+
+0.11.11 用 `jobs.read()` 想抑制完成通知，但查了宿主实现：
+
+```js
+this.emit({ type: "settled", job, cause, awaited: waitResolvers.length > 0 }, job.owner)
+```
+
+`awaited` 只取决于**结算瞬间是否还有 waiter**（`job_output { wait: true }` 走的就是 `wait()`）。
+普通 `read` 不改变它 ⇒ 那条路不成立。
+
+- 改为在登记 job 后挂一个 `jobs.wait(jobId, 30000, ownerId)`，超时未结算就**每隔 1 秒重挂**
+  （用 `setTimeout` 而非立即重挂，避免"立即 resolve 的 wait"把事件循环饿死——测试里踩过，整条命令被拖到晋升）；
+- 结算时 `waiterStopped = true`，不再重挂；随后移除 job。
+
+全量 **40 套件 / 1,683 断言**通过；`check-package` 62/62；schema 不变（35,857 B）。
+
+
 ## 0.11.11 — 2026-11-14（前台命令一开始就登记 job：立刻可见、随时可停）
 
 你说得对：既然 10 秒后终归要转后台，就没必要等到那一刻才让它出现在任务列表里。

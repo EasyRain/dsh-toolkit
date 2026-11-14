@@ -457,18 +457,19 @@ console.log('== 19. 中途晋升为后台（ops 的 promoted 语义）==')
 
         let fgStarts = 0
         let removedJob = null
-        let readCalls = 0
+        let waitCalls = 0
         let capturedFg = null
         const jobs2 = {
             start(options) { fgStarts += 1; capturedFg = options; return 'job-fg' },
-            read() { readCalls += 1; return { chunks: [], job: { status: 'completed' } } },
+            // 挂 waiter 是抑制 tool-jobs 完成通知的手段（settled.awaited 取决于结算瞬间有无 waiter）
+            wait() { waitCalls += 1; return Promise.resolve({ status: 'completed' }) },
             remove(id) { removedJob = id },
         }
         const defFg = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6, getJobs: () => jobs2 })[0]
         const fgText = await defFg.execute({ command: 'echo hi' }, { agent: { id: 'a1', session: { id: 's-run' } } })
         ok('前台命令一开始就登记 job（立刻可见、可停）', fgStarts === 1 && capturedFg?.kind === 'bash' && /ok=true/.test(fgText), JSON.stringify({ fgStarts }))
         ok('前台 job 的 owner 是 session id', capturedFg?.owner === 's-run', JSON.stringify(capturedFg?.owner))
-        ok('结算时先消费一次读（抑制 tool-jobs 通知）', readCalls >= 1, String(readCalls))
+        ok('登记时挂 waiter ⇒ 结算通知被收走（不产生上下文注入）', waitCalls >= 1, String(waitCalls))
         ok('随后从任务列表移除', removedJob === 'job-fg', JSON.stringify({ removedJob }))
         const def2 = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6 })[0]
         const killed = await def2.execute({ command: 'sleep 5', timeoutMs: 300 })
@@ -655,7 +656,7 @@ console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
         off()
 
         let removeCalls = 0
-        const jobs3 = { start() { return 'job-r' }, read() { return { chunks: [] } }, remove() { removeCalls += 1 } }
+        const jobs3 = { start() { return 'job-r' }, wait() { return Promise.resolve({}) }, remove() { removeCalls += 1 } }
         const defR = tools((tool) => tool, { resolveWorkspaceCwd: () => dir9, getJobs: () => jobs3 })[0]
         await defR.execute({ command: 'echo retry-drop' }, { agent: { id: 'a1', session: { id: 's2' } } })
         await new Promise((resolve) => setTimeout(resolve, 300))
@@ -706,7 +707,7 @@ console.log('== 25. 宿主 subprocess 路径（spawn/终止/输出交给宿主�
     // 执行器内部异常（宿主句柄 done 直接 reject）：不能把异常抛给上层，也不该留下 job。
     const rejecting = { spawn() { return { collected: { stdout: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) }, stderr: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) } }, done: Promise.reject(new Error('boom')), terminate() {} } } }
     const removedIds = []
-    const jobsBroken = { start() { return 'job-broken' }, read() { return { chunks: [] } }, remove(id) { removedIds.push(id) } }
+    const jobsBroken = { start() { return 'job-broken' }, wait() { return Promise.resolve({}) }, remove(id) { removedIds.push(id) } }
     const defBroken = bashModule.tools((tool) => tool, { subprocess: rejecting, getJobs: () => jobsBroken, resolveWorkspaceCwd: () => tmpdir(), ...(TEST_BASH === null ? {} : { bashPath: TEST_BASH }) })[0]
     const brokenText = await defBroken.execute({ command: 'x', description: 'broken' })
     ok('执行器内部异常 ⇒ SPAWN_FAILED 而不是抛给上层', /\[failure: SPAWN_FAILED/.test(brokenText), brokenText.slice(-160))
