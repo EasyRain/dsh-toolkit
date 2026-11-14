@@ -4,6 +4,24 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.8 — 2026-11-14（后台下载登记成宿主 job：看得见、停得掉、有进度）
+
+以前后台下载只在**自己的**状态文件里跑（`downloads/.dsh-downloads/`），宿主的任务列表看不到，
+用户也没法单独停 —— 只能等它跑完。
+
+- `startBackground` 现在额外 `jobs.start({ kind: 'download', label: '<文件名> (大小)', owner: exec.agent })`：
+  下载会出现在「后台任务」里，**可以直接点停止**；
+- 进度边走边上报（`handle.updateProgress`，500 ms 读一次状态文件：百分比 / 已下 / 总量 / 状态）；
+- 取消沿用原有的 `.cancel` 标志文件（worker 自己收尾、**保留 `.part` 以便续传**），再补一刀 `kill` 兜底；
+- 结算后 1.5 s 自动从任务列表移除（完成通知已经发出，列表只留还在跑的下载）；
+- 回执里多一行：`也出现在「后台任务」里（jobId=…），可直接在那里停止`。
+
+没有 jobs 服务时一切照旧（行为不变）。
+
+新增回归（5 条）：登记 kind/label/owner、回执提到任务列表、取消后 job 结算为 killed。
+
+全量 **40 套件 / 1,681 断言**通过；`check-package` 62/62；schema 不变（35,857 B）。
+
 ## 0.11.7 — 2026-11-14（前台转后台阈值 20 s → 10 s）
 
 按实际使用调整：**快命令几秒就跑完，长命令大多可预见**；真正需要"手动停"的，恰恰是

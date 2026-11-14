@@ -268,6 +268,26 @@ console.log('== 8b. 回归：目标不在默认 downloads/ 下时，status/cance
     slowMode = false
 }
 
+console.log('== 8c. 后台下载同时登记成宿主 job（UI 可见 / 可停止 / 有进度）==')
+{
+    slowMode = true
+    const to = join(cwd, 'downloads', 'job-host.bin')
+    let captured = null
+    const fakeJobs = { start(options) { captured = options; return 'download-job-1' }, remove() { /* 结算后移除 */ } }
+    const fakeCtx = { get: (name) => (name === 'jobs' ? fakeJobs : undefined) }
+    const defs = D.tools((t) => t, { getCtx: () => fakeCtx })
+    const dl2 = defs.find((t) => t.name === 'download')
+    const out = await dl2.execute({ action: 'start', url: `${base}/big.bin`, to, proxy: 'direct', threads: 4, mode: 'background' }, exec)
+    ok('后台下载登记了宿主 job', captured !== null && captured.kind === 'download', JSON.stringify(captured?.kind))
+    ok('job 标签带文件名', /job-host\.bin/.test(String(captured?.label ?? '')), String(captured?.label))
+    ok('job 有 owner（UI 才能单独停止）', captured?.owner !== undefined)
+    ok('回执里提到可在「后台任务」停止', /后台任务/.test(out) && /download-job-1/.test(out), out.split('\n').slice(0, 3).join(' | ').slice(0, 120))
+    const run = captured.run({ id: 'download-job-1', append() {}, updateProgress() {} })
+    run.cancel('cancelled by the user')
+    const settled = await run.done
+    ok('取消 ⇒ job 结算为 killed', settled.status === 'killed', JSON.stringify(settled))
+}
+
 console.log('== 9. 工具层：状态列表 / 参数校验 / 坏代理 ==')
 {
     const listOut = await st.execute({}, exec)
