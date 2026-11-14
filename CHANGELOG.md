@@ -6,16 +6,16 @@
 
 ## 0.11.2 — 2026-11-14（0.11.0 的修复放错了位置：register 阶段已经太晚）
 
-0.11.0 把“去掉嵌套 required”放在了注册收口 （ 之前），
-但各段的写法是  —— ** 先跑**：它已经因为嵌套 required
-抛错，退回“schema 校验被禁用”的兜底，register 再洗已经晚了（描述里那句
- 就是这么来的）。
+0.11.0 把「去掉嵌套 required」放在了注册收口 `sanitizeDefinition`（`ctx.tools.register` 之前），
+但各段的写法是 `ctx.tools.register(defineTool(def))` —— **`defineTool` 先跑**：它已经因为嵌套 required
+抛错，退回「schema 校验被禁用」的兜底，register 再洗已经晚了（描述里那句
+`[schema validation disabled: …]` 就是这么来的；0.11.1 重启后信标仍报 `defineTool rejected` 就是证据）。
 
-- 把清洗前移到 ：**defineTool 之前**先 ；
-- 兜底分支也补洗一次（）；
-- 新增回归：用一个“看到嵌套 required 就抛”的 strict defineTool 模拟宿主，断言不再抛错、描述没有污染后缀。
+- 把清洗前移到 `makeSafeDefineTool`：**defineTool 之前**先 `stripNestedRequired(tool.parameters)`；
+- 兜底分支也补洗一次（`stripNestedRequired(toJsonSchema(...))`）；
+- 新增回归：用一个「看到嵌套 required 就抛」的 strict defineTool 模拟宿主，断言不再抛错、描述没有污染后缀。
 
-全量 **40 套件 / 1,674 断言**通过； 62/62；schema 不变（35,732 B）。
+全量 **40 套件 / 1,674 断言**通过；`check-package` 62/62；schema 不变（35,732 B）。
 
 ## 0.11.1 — 2026-11-14（前台命令不再被宿主 tool-jobs 逐条注入完成通知）
 
