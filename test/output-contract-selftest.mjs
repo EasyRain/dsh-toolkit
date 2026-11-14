@@ -70,12 +70,29 @@ function lintRequired(node, where, out) {
         lintRequired(value, `${where}.${key}`, out)
     }
 }
+// 参数：宿主 0.2.2-rc.3 的 value-schema DSL **只允许根节点**有 required，嵌套一律拒绝
+// （`...items.required is not supported by the value schema DSL`）。我们现在把嵌套的整段去掉。
+function lintNestedRequired(node, where, out, depth = 0) {
+    if (node === null || typeof node !== 'object') return
+    if (Array.isArray(node)) { node.forEach((value, index) => lintNestedRequired(value, `${where}[${index}]`, out, depth)); return }
+    for (const [key, value] of Object.entries(node)) {
+        if (key === 'required') {
+            if (depth > 0) out.push(`${where}.required`)
+            else if (!Array.isArray(value) || value.some((name) => typeof name !== 'string')) out.push(`${where}.required = ${JSON.stringify(value)}`)
+            continue
+        }
+        lintNestedRequired(value, `${where}.${key}`, out, depth + 1)
+    }
+}
 const requiredDrift = []
+const nestedRequired = []
 for (const tool of registered) {
-    lintRequired(tool.parameters, `${tool.name}.parameters`, requiredDrift)
+    lintNestedRequired(tool.parameters, `${tool.name}.parameters`, nestedRequired)
+    // 输出 schema 是原始 JSON Schema（不经宿主 DSL 编译），仍要求任何层级都是字符串数组。
     lintRequired(tool.output?.schema, `${tool.name}.output`, requiredDrift)
 }
-ok('任何层级的 required 都是字符串数组（严格 provider 契约）', requiredDrift.length === 0, requiredDrift.slice(0, 5).join('；'))
+ok('参数里没有嵌套 required（宿主 rc.3 DSL 不接受）', nestedRequired.length === 0, nestedRequired.slice(0, 5).join('；'))
+ok('根级 required 仍是字符串数组（严格 provider 契约）', requiredDrift.length === 0, requiredDrift.slice(0, 5).join('；'))
 
 // --- ① 静态 lint ------------------------------------------------------------
 /** 递归找"additionalProperties:false 但没 properties"的 object schema（宿主会拒收这类返回值） */

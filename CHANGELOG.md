@@ -4,6 +4,31 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.0 — 2026-11-14（适配宿主 0.2.23-next / 内核 0.2.2-rc.3：参数 schema 的嵌套 required）
+
+DSH 升到 app `2.0.23-next` + 内核 `0.2.2-rc.3`。新内核改用**自己的 value-schema DSL** 编译工具参数，
+规则变成「**只有根节点**允许 `required: [...]`」；数组 items 的对象里再出现 `required` 会被判
+
+```text
+unsupported JSON schema: parameters.edits.items.required is not supported by the value schema DSL
+```
+
+⇒ `file` 与 `ast_edit` 的 `defineTool` 直接被拒，退化成"schema 校验被禁用"的兜底注册（描述后面拖着一句
+`[schema validation disabled: …]`，宿主侧不再校验参数）。
+
+- 注册收口新增 `stripNestedRequired()`：把**嵌套的 required 整段去掉**（不留布尔形式，也不猜宿主接受哪种），
+  根节点的 `required: [...]` 保持原样。嵌套必填改由运行时校验 + 字段描述兜底
+  （`edits` 的 oldText/newText、`ops` 的 pat/out、`verify` 的 text 都在描述里写明了）。
+- 收紧自测契约：参数里**不允许出现任何嵌套 required**（新增 `test/schema-dsl-selftest.mjs`，14 条）；
+  输出 schema 仍是原始 JSON Schema，维持"任何层级都是字符串数组"的旧契约。
+- 顺带核对其它兼容面：`sandboxPolicy`（新键 `writableRootRegistration`，`resolve()` 形状不变）、
+  `sandbox.confine`、`jobs`、`tools.restrict`、`commands` 均正常；`engines.dsh` 区间
+  `>=0.2.0-rc.2 <0.3.0-0` 覆盖 rc.3，无需改动。
+
+schema：去掉嵌套 required 后 `file` 4,761 → **4,714 B**、`ast` 8,528 → **8,487 B**，全量 **35,732 B**。
+
+全量 **40 套件 / 1,668 断言**通过；`check-package` 62/62。
+
 ## 0.10.9 — 2026-11-11（审计 v0.9.0–0.10.8 的改动，修 5 个问题）
 
 把这一段的 diff 逐块过了一遍（含真机复现），找到并修掉：
