@@ -1,6 +1,6 @@
 {
     "name": "dsh-toolkit",
-    "version": "0.11.6",
+    "version": "0.11.7",
     "description": "自有 DSH 多工具插件（15 个工具 = 七族 + 一个按需帮助；工具面已收敛）：① 表 diff（table_diff / table_peek，任意表格式自动识别 Lua/JSON/JSONL/CSV/TSV/PO/properties/YAML/TOML/zip-jar/mappings/SQLite，一律哈希连接 O(N+M)）；② AST 结构检索/改写（ast_search / ast_dump_tree / ast_test_rule / ast_edit —— 改写为进程内 @ast-grep/napi 引擎）；③ 会话日志（session_list 列表含子代理登记 / session_read 读取或正则过滤 / session_diff / session_export，原生 zstd 逐帧解码）；④ 快照与回滚（checkpoint 一个工具七个动作 create/list/diff/restore/prune/journal/journal_restore，与 /checkpoint /rewind 命令）；⑤ 下载（download 一个工具四个动作 start/probe/status/cancel，多线程+断点续传+代理自动探测）；⑥ bash 执行器（bash，用系统 Git Bash 跑 POSIX 命令行；非交互、超时杀整棵进程树、输出上限 2 MB）；⑦ 文件读写（file 一个工具八个动作 read/stat/write/edit/copy/move/remove/mkdir：编码探测 BOM→UTF-8→GB18030、二进制 hex、revision CAS + 原子写）；⑧ 按需帮助（toolkit_help，16 个主题含 ast-grep 规则指南）。自测见 test/*-selftest.mjs（35 份，node test/run-all.mjs）。SQLite 输入需要 Node ≥23.4（或 22.5+ 加 --experimental-sqlite）；其余功能在 22.5+ 可用。",
     "license": "MIT",
     "author": "EasyRain",

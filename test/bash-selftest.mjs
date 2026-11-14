@@ -284,7 +284,7 @@ console.log('== 14. 与 ops 对齐的新参数（script_path / workdir / graceMs
     }
 }
 
-console.log('== 14e. 前台默认 20 秒转后台（长命令可在「后台任务」里单独停止）==')
+console.log('== 14e. 前台默认 10 秒转后台（长命令可在「后台任务」里单独停止）==')
 {
     const dirP = mkdtempSync(join(tmpdir(), 'tk bash promote-after-'))
     try {

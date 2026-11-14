@@ -4,6 +4,16 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.7 — 2026-11-14（前台转后台阈值 20 s → 10 s）
+
+按实际使用调整：**快命令几秒就跑完，长命令大多可预见**；真正需要"手动停"的，恰恰是
+"几秒就该结束、却真的卡住了"的短命令 —— 20 秒对它太迟。
+
+- `DEFAULTS.promoteAfterMs` 20,000 → **10,000**（`timeoutMs` 或 `DSH_TOOLKIT_PROMOTE_AFTER_MS` 仍可覆盖）；
+- 工具描述同步为 "promoted after ~10 s"。
+
+schema 不变（35,857 B；描述里只有数字变了）。全量 **40 套件 / 1,676 断言**通过；`check-package` 62/62。
+
 ## 0.11.6 — 2026-11-14（前台默认 20 秒转后台：长命令重新可单独停止）
 
 0.11.5 把前台 job 全去掉之后，"单独停止某条命令"这个能力也跟着没了 —— 只剩停止整个会话。
