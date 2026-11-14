@@ -284,7 +284,7 @@ console.log('== 14. 与 ops 对齐的新参数（script_path / workdir / graceMs
     }
 }
 
-console.log('== 14f. 前台任务不设 owner（避免宿主 tool-jobs 每条命令注入完成通知）==')
+console.log('== 14f. 前台命令不创建 job（避免控制器拒绝与逐条通知）==')
 {
     const dirF = mkdtempSync(join(tmpdir(), 'tk bash fg-owner-'))
     try {
@@ -293,8 +293,7 @@ console.log('== 14f. 前台任务不设 owner（避免宿主 tool-jobs 每条命
         const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dirF, getJobs: () => fakeJobs })[0]
         const text = await def.execute({ command: 'echo fg-hi', description: 'fg' }, { agent: { id: 'agent-1', session: { id: 's-1' } } })
         ok('前台命令正常执行', /exit code: 0/.test(text), text.slice(0, 120))
-        ok('前台 task 仍登记为 job（可单条停止）', captured !== null && captured.kind === 'bash')
-        ok('前台 job **没有 owner**（有主 job 才会被 tool-jobs 注入完成通知）', captured?.owner === undefined, JSON.stringify(captured?.owner))
+        ok('前台命令**完全不创建 job**（无主会被控制器拒绝，有主会被逐条注入通知）', captured === null, JSON.stringify(captured))
     }
     finally { rmSync(dirF, { recursive: true, force: true }) }
 }
@@ -429,13 +428,13 @@ console.log('== 19. 中途晋升为后台（ops 的 promoted 语义）==')
         const done = await run.done
         ok('取消后任务结束', done.status === 'failed' || done.exitCode !== 0, JSON.stringify(done))
 
-        let fgJob = null
+        let fgStarts = 0
         let removedJob = null
-        const jobs2 = { start(options) { fgJob = options; return 'job-fg' }, remove(id) { removedJob = id } }
+        const jobs2 = { start() { fgStarts += 1; return 'job-fg' }, remove(id) { removedJob = id } }
         const defFg = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6, getJobs: () => jobs2 })[0]
         const fgText = await defFg.execute({ command: 'echo hi' })
-        ok('前台命令也先登记成 job（可单独停止）', fgJob !== null && fgJob.kind === 'bash' && /ok=true/.test(fgText), JSON.stringify({ kind: fgJob?.kind }))
-        ok('正常结束后从任务列表移除', removedJob === 'job-fg', JSON.stringify({ removedJob }))
+        ok('前台命令不登记 job（只有晋升时才登记）', fgStarts === 0 && /ok=true/.test(fgText), JSON.stringify({ fgStarts }))
+        ok('因此也没有移除动作', removedJob === null, JSON.stringify({ removedJob }))
         const def2 = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6 })[0]
         const killed = await def2.execute({ command: 'sleep 5', timeoutMs: 300 })
         ok('没有 jobs 服务时仍按超时杀掉', /timedOut=true/.test(killed), killed.slice(0, 140))
@@ -621,12 +620,11 @@ console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
         off()
 
         let removeCalls = 0
-        let removedId = null
-        const jobs3 = { start() { return 'job-r' }, remove(id) { removeCalls += 1; if (removeCalls < 3) throw new Error('job still running'); removedId = id } }
+        const jobs3 = { start() { return 'job-r' }, remove() { removeCalls += 1 } }
         const defR = tools((tool) => tool, { resolveWorkspaceCwd: () => dir9, getJobs: () => jobs3 })[0]
         await defR.execute({ command: 'echo retry-drop' }, { agent: { id: 'a1', session: { id: 's2' } } })
         await new Promise((resolve) => setTimeout(resolve, 300))
-        ok('结算后重试直到移除（不再堆积“已结束”）', removedId === 'job-r' && removeCalls >= 3, JSON.stringify({ removeCalls, removedId }))
+        ok('前台执行不产生 job ⇒ 也不调用 remove', removeCalls === 0, String(removeCalls))
     }
     finally { bestEffortRm(dir9) }
 }
@@ -670,14 +668,14 @@ console.log('== 25. 宿主 subprocess 路径（spawn/终止/输出交给宿主�
     const ra = await runBash('sleep', { subprocess: hostAbort, signal: controller.signal })
     ok('取消回执带 cancelled', ra.ok === false && /cancelled/i.test(ra.error ?? ''), JSON.stringify({ error: ra.error }))
 
-    // 执行器内部异常（宿主句柄 done 直接 reject）：不能把 job 永远挂在列表里，也不能把异常抛给上层。
+    // 执行器内部异常（宿主句柄 done 直接 reject）：不能把异常抛给上层，也不该留下 job。
     const rejecting = { spawn() { return { collected: { stdout: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) }, stderr: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) } }, done: Promise.reject(new Error('boom')), terminate() {} } } }
     const removedIds = []
     const jobsBroken = { start() { return 'job-broken' }, remove(id) { removedIds.push(id) } }
     const defBroken = bashModule.tools((tool) => tool, { subprocess: rejecting, getJobs: () => jobsBroken, resolveWorkspaceCwd: () => tmpdir(), ...(TEST_BASH === null ? {} : { bashPath: TEST_BASH }) })[0]
     const brokenText = await defBroken.execute({ command: 'x', description: 'broken' })
     ok('执行器内部异常 ⇒ SPAWN_FAILED 而不是抛给上层', /\[failure: SPAWN_FAILED/.test(brokenText), brokenText.slice(-160))
-    ok('异常路径也会把已登记的 job 清掉', removedIds.includes('job-broken'), JSON.stringify(removedIds))
+    ok('异常路径没有留下 job（前台不登记）', removedIds.length === 0, JSON.stringify(removedIds))
 
     let liveText = 'partial\n'
     const liveReader = { readFrom(from) { return { text: liveText.slice(from), nextOffset: liveText.length, lossy: false } } }

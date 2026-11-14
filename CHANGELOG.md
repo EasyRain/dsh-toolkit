@@ -4,6 +4,37 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.5 — 2026-11-14（前台不再创建 job；超时晋升改为"现场登记"）
+
+你截图里那条：
+
+```text
+ok=false  kind=promoted
+晋升后台失败（已终止命令）：宿主 jobs 服务拒绝登记
+```
+
+**不是**进程自己结束了——命令（`sleep 60; ls …`）当时还在跑，是我们把"登记 job / 晋升"的顺序搞错了。
+
+根因：0.11.1 为了消掉 tool-jobs 的逐条通知，把前台 job 改成**无主**。但宿主的控制器是**按 scope 挂的**
+（`servesOwner(undefined)` 只在**全局**控制器存在时才为真），所以无主前台 `jobs.start` 直接抛
+`JOB_CONTROLLER_UNAVAILABLE`；我们把它 catch 掉并静默降级（`jobId = undefined`），于是超时那一刻
+**没有 job 可以复用**，只能杀掉命令并报"拒绝登记"。也就是说：
+
+- 前台"单条可停"其实从 0.11.1 起就失效了；
+- 超时晋升从 0.11.1 起全部失败（命令被我们杀掉）。
+
+修法（回归到最简单也最正确的形状）：
+
+- **前台命令完全不创建 job**（取消仍由 `exec.signal` + 宿主停止按钮完成，整棵树照杀）；
+- **只有真的超时**才现场登记一个**有主**的 job（`owner = session.id ?? agent.id`）包住已在运行的进程，
+  返回 `kind=promoted jobId=…`；登记失败时回执里带上**真实原因**（不再统一说"拒绝登记"）；
+- 顺带修掉信标里的假象：`namesOf(() => X.tools(defineTool, {}))` 之前用的是**未清洗**的 `defineTool`，
+  会打印早已不存在的 `items.required` 报错（注册其实是好的）——现在诊断也用 `safeDefineTool`。
+
+自测同步：前台"不登记 / 不移除"三条，晋升用例保留（断言 `jobs.start` 被调用且带 owner）。
+
+全量 **40 套件 / 1,674 断言**通过；`check-package` 62/62；schema 不变（35,733 B）。
+
 ## 0.11.4 — 2026-11-14（DSL 还要求「带 properties 的对象显式声明 additionalProperties」）
 
 0.11.3 让 `ast_edit` 通过了，但 `file` 换了一个新错：
