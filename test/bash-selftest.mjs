@@ -325,6 +325,38 @@ console.log('== 14f. 前台命令一开始就登记 job（可见/可停），结
     finally { rmSync(dirF, { recursive: true, force: true }) }
 }
 
+console.log('== 19b. 转后台时撤销 waiter（命令跑完要有完成通知）==')
+{
+    const dirW = mkdtempSync(join(tmpdir(), 'tk bash waiter-abort-'))
+    try {
+        let waiterSignal = null
+        let settledWithWaiter = null
+        const jobs = {
+            start(options) {
+                // 模拟宿主：settled.awaited = 结算瞬间还有没有 waiter
+                const original = options.run
+                return 'job-w'
+            },
+            wait(_id, _timeout, _caller, signal) {
+                waiterSignal = signal
+                return new Promise((resolve, reject) => {
+                    if (signal?.aborted) { reject(new Error('aborted')) ; return }
+                    signal?.addEventListener('abort', () => { settledWithWaiter = false; reject(new Error('aborted')) }, { once: true })
+                })
+            },
+            remove() { /* 移除 */ },
+        }
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dirW, getJobs: () => jobs })[0]
+        const text = await def.execute({ command: 'sleep 3; echo late', timeoutMs: 400, description: 'abort waiter' }, { agent: { id: 'a1', session: { id: 's1' } } })
+        ok('转后台成功', /kind=promoted/.test(text), text.slice(0, 100))
+        ok('waiter 拿到了 abort signal', waiterSignal !== null && typeof waiterSignal?.aborted === 'boolean')
+        ok('转后台时 waiter 被撤销（⇒ 完成时会发通知）', waiterSignal?.aborted === true)
+        // 等那条 sleep 自己结束，再清理目录（否则会 EPERM）
+        await new Promise((resolve) => setTimeout(resolve, 3500))
+    }
+    finally { bestEffortRm(dirW) }
+}
+
 console.log('== 15. 后台任务（接宿主 jobs 服务）==')
 {
     const dir4 = mkdtempSync(join(tmpdir(), 'tk bash bg-'))

@@ -4,6 +4,23 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.13 — 2026-11-14（转后台的命令要收到完成通知）
+
+核对了宿主的机制：`dsh-tool-jobs` 在 job 结算时会给 owner 投递一条
+`user/message(source: tool-jobs)`（agent 忙 ⇒ `inject`，空闲且 delivery=wakeup ⇒ `followup` 直接起一轮），
+**只有**三种情况不发：模型自己 `job_kill`、结算被存活 wait 收走（`awaited`）、teardown。
+
+0.11.12 给前台命令挂了 waiter（抑制噪声），但**转后台后没有撤掉它** ⇒ 长命令跑完也收不到通知，
+只能靠模型自己想起来轮询。这不是想要的语义。
+
+- 转后台时 `waiterStopped = true` + `waiterAbort.abort()`（`jobs.wait` 收到 abort 会把 resolver 从
+  `job.waitResolvers` 里删掉）⇒ 结算时 `awaited = false` ⇒ **完成通知正常发出**；
+- 于是语义变成：**短命令静默、转后台的命令会主动通知、显式后台任务/下载也通知**。
+
+新增回归：转后台时 waiter 被 abort。
+
+全量 **40 套件 / 1,686 断言**通过；`check-package` 62/62；schema 不变（35,857 B）。
+
 ## 0.11.12 — 2026-11-14（用"存活 waiter"抑制完成通知，而不是消费读）
 
 0.11.11 用 `jobs.read()` 想抑制完成通知，但查了宿主实现：
