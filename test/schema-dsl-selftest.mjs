@@ -16,7 +16,7 @@ import { homedir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { existsSync } from 'node:fs'
 
-const { stripNestedRequired, toJsonSchema } = await import('../lib/deps.js')
+const { makeSafeDefineTool, stripNestedRequired, toJsonSchema } = await import('../lib/deps.js')
 const fileFamily = await import('../lib/file/index.js')
 
 let failures = 0
@@ -94,6 +94,39 @@ try {
             properties: { pairs: { type: 'array', items: [{ type: 'object', properties: { k: { type: 'string' } }, required: ['k'] }] } },
         })
         ok('items 是数组（元组）时也处理', nestedRequiredPaths(itemsArray).length === 0, nestedRequiredPaths(itemsArray).join(', '))
+    }
+
+    console.log('== 2b. makeSafeDefineTool：在 defineTool **之前**就洗掉（否则兜底=校验被禁用）==')
+    {
+        // 模拟宿主 rc.3：看到嵌套 required 就抛错
+        const strictDefineTool = (tool) => {
+            const walk = (node, depth = 0) => {
+                if (node === null || typeof node !== 'object') return
+                if (Array.isArray(node)) { node.forEach((value) => walk(value, depth)); return }
+                for (const [key, value] of Object.entries(node)) {
+                    if (key === 'required' && depth > 0) throw new Error('parameters.x.items.required is not supported by the value schema DSL')
+                    walk(value, depth + 1)
+                }
+            }
+            walk(tool.parameters)
+            return tool
+        }
+        const errors = []
+        const safe = makeSafeDefineTool(strictDefineTool, (name, reason) => errors.push(`${name}: ${reason}`))
+        const out = safe({
+            name: 'file',
+            description: 'demo',
+            parameters: {
+                type: 'object',
+                properties: {
+                    edits: { type: 'array', items: { type: 'object', properties: { oldText: { type: 'string' } }, required: ['oldText'] } },
+                },
+                required: ['edits'],
+            },
+        })
+        ok('严格 defineTool 不再抛错（说明是在它之前洗的）', errors.length === 0, errors.join(' | '))
+        ok('描述里没有 "schema validation disabled" 后缀', !/schema validation disabled/.test(String(out.description)), String(out.description))
+        ok('根 required 仍在', Array.isArray(out.parameters.required) && out.parameters.required.join(',') === 'edits')
     }
 
     console.log('== 3. 我们的工具定义：注册形状里没有嵌套 required 数组 ==')
