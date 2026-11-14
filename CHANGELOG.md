@@ -4,6 +4,24 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.6 — 2026-11-14（前台默认 20 秒转后台：长命令重新可单独停止）
+
+0.11.5 把前台 job 全去掉之后，"单独停止某条命令"这个能力也跟着没了 —— 只剩停止整个会话。
+但宿主 UI 的单个停止按钮挂在**任务列表**上（`jobs.kill(jobId, sessionId, 'cancelled by the user')`），
+没有 job 就没有按钮。
+
+折中：**前台命令默认 20 秒后自动转后台**（`DEFAULTS.promoteAfterMs`，`timeoutMs` 或环境变量
+`DSH_TOOLKIT_PROMOTE_AFTER_MS` 可覆盖）：
+
+- 短命令（<20 s）照旧原地跑完：不创建 job、无完成通知（不吵）；
+- 长命令在 20 s 时转成**有主 job**：出现在「后台任务」里，可以**单独停止**；结束时一条通知（此时有用）；
+- 晋升 job 的 `owner` 改传 **Agent 对象**（宿主文档写法 `owner: exec.agent`），不再传 id 字符串。
+
+工具描述同步说明了这个行为。
+
+schema：`shell` 2,290 → **2,414 B**，全量 **35,857 B**。
+全量 **40 套件 / 1,676 断言**通过；`check-package` 62/62。
+
 ## 0.11.5 — 2026-11-14（前台不再创建 job；超时晋升改为"现场登记"）
 
 你截图里那条：

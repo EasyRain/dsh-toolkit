@@ -284,6 +284,33 @@ console.log('== 14. 与 ops 对齐的新参数（script_path / workdir / graceMs
     }
 }
 
+console.log('== 14e. 前台默认 20 秒转后台（长命令可在「后台任务」里单独停止）==')
+{
+    const dirP = mkdtempSync(join(tmpdir(), 'tk bash promote-after-'))
+    try {
+        let captured = null
+        const jobs = { start(options) { captured = options; return 'job-auto' } }
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dirP, getJobs: () => jobs })[0]
+        // 不传 timeoutMs：用默认阈值（这里把阈值临时调小，免得测试等 20 秒）
+        const previous = process.env.DSH_TOOLKIT_PROMOTE_AFTER_MS
+        process.env.DSH_TOOLKIT_PROMOTE_AFTER_MS = '300'
+        let text
+        try {
+            text = await def.execute({ command: 'sleep 5; echo late', description: 'auto promote' }, { agent: { id: 'a1', session: { id: 's1' } } })
+        }
+        finally {
+            if (previous === undefined) delete process.env.DSH_TOOLKIT_PROMOTE_AFTER_MS
+            else process.env.DSH_TOOLKIT_PROMOTE_AFTER_MS = previous
+        }
+        ok('默认超时 ⇒ 转后台并给 jobId', /kind=promoted/.test(text) && /jobId=job-auto/.test(text), text.slice(0, 160))
+        ok('晋升 job 带 owner（UI 才能单独停止）', captured?.owner !== undefined, JSON.stringify(captured?.owner))
+        const run = captured.run()
+        run.cancel('stop')
+        await run.done
+    }
+    finally { rmSync(dirP, { recursive: true, force: true }) }
+}
+
 console.log('== 14f. 前台命令不创建 job（避免控制器拒绝与逐条通知）==')
 {
     const dirF = mkdtempSync(join(tmpdir(), 'tk bash fg-owner-'))
