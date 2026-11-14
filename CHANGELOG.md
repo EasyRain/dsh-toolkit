@@ -4,6 +4,23 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.9 — 2026-11-14（job 的 owner 要 session id，不是 Agent 对象）
+
+0.11.6 / 0.11.8 里我按宿主文档的 `owner: exec.agent` 传了 **Agent 对象**，真机一跑就暴露：
+
+```text
+晋升后台失败（已终止命令）：session "[object Object]" has no live agent (background job owner must be live)
+```
+
+`JobSpec.owner` 的类型是 **SessionId**（`resolveOwner(session)` 拿它去查 live agent），
+传对象只会被字符串化成 `"[object Object]"`。0.11.5 之前传的是 `exec.agent.session.id ?? exec.agent.id`，
+那条路才是对的。
+
+- `bash` 的晋升 job、`download` 的后台 job 都改回**字符串 session id**（缺 id 时不设 owner）；
+- 两条回归改成断言 `owner === 's1'/'sess-dl-1'`（类型 + 取值都盯住，避免再"传错类型"）。
+
+全量 **40 套件 / 1,681 断言**通过；`check-package` 62/62；schema 不变（35,857 B）。
+
 ## 0.11.8 — 2026-11-14（后台下载登记成宿主 job：看得见、停得掉、有进度）
 
 以前后台下载只在**自己的**状态文件里跑（`downloads/.dsh-downloads/`），宿主的任务列表看不到，

@@ -303,7 +303,7 @@ console.log('== 14e. 前台默认 10 秒转后台（长命令可在「后台任�
             else process.env.DSH_TOOLKIT_PROMOTE_AFTER_MS = previous
         }
         ok('默认超时 ⇒ 转后台并给 jobId', /kind=promoted/.test(text) && /jobId=job-auto/.test(text), text.slice(0, 160))
-        ok('晋升 job 带 owner（UI 才能单独停止）', captured?.owner !== undefined, JSON.stringify(captured?.owner))
+        ok('晋升 job 的 owner 是 **session id 字符串**（传 Agent 对象会被字符串化）', typeof captured?.owner === 'string' && captured.owner === 's1', JSON.stringify(captured?.owner))
         const run = captured.run()
         run.cancel('stop')
         await run.done

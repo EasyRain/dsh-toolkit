@@ -277,10 +277,11 @@ console.log('== 8c. 后台下载同时登记成宿主 job（UI 可见 / 可停�
     const fakeCtx = { get: (name) => (name === 'jobs' ? fakeJobs : undefined) }
     const defs = D.tools((t) => t, { getCtx: () => fakeCtx })
     const dl2 = defs.find((t) => t.name === 'download')
-    const out = await dl2.execute({ action: 'start', url: `${base}/big.bin`, to, proxy: 'direct', threads: 4, mode: 'background' }, exec)
+    const execWithSession = { ...exec, agent: { ...exec.agent, session: { ...exec.agent.session, id: 'sess-dl-1' } } }
+    const out = await dl2.execute({ action: 'start', url: `${base}/big.bin`, to, proxy: 'direct', threads: 4, mode: 'background' }, execWithSession)
     ok('后台下载登记了宿主 job', captured !== null && captured.kind === 'download', JSON.stringify(captured?.kind))
     ok('job 标签带文件名', /job-host\.bin/.test(String(captured?.label ?? '')), String(captured?.label))
-    ok('job 有 owner（UI 才能单独停止）', captured?.owner !== undefined)
+    ok('job 的 owner 是 session id 字符串（UI 才能单独停止）', captured?.owner === 'sess-dl-1', JSON.stringify(captured?.owner))
     ok('回执里提到可在「后台任务」停止', /后台任务/.test(out) && /download-job-1/.test(out), out.split('\n').slice(0, 3).join(' | ').slice(0, 120))
     const run = captured.run({ id: 'download-job-1', append() {}, updateProgress() {} })
     run.cancel('cancelled by the user')
