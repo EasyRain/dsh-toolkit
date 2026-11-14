@@ -284,6 +284,21 @@ console.log('== 14. 与 ops 对齐的新参数（script_path / workdir / graceMs
     }
 }
 
+console.log('== 14f. 前台任务不设 owner（避免宿主 tool-jobs 每条命令注入完成通知）==')
+{
+    const dirF = mkdtempSync(join(tmpdir(), 'tk bash fg-owner-'))
+    try {
+        let captured = null
+        const fakeJobs = { start(options) { captured = options; return 'job-fg' }, remove() { /* 移除 */ } }
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dirF, getJobs: () => fakeJobs })[0]
+        const text = await def.execute({ command: 'echo fg-hi', description: 'fg' }, { agent: { id: 'agent-1', session: { id: 's-1' } } })
+        ok('前台命令正常执行', /exit code: 0/.test(text), text.slice(0, 120))
+        ok('前台 task 仍登记为 job（可单条停止）', captured !== null && captured.kind === 'bash')
+        ok('前台 job **没有 owner**（有主 job 才会被 tool-jobs 注入完成通知）', captured?.owner === undefined, JSON.stringify(captured?.owner))
+    }
+    finally { rmSync(dirF, { recursive: true, force: true }) }
+}
+
 console.log('== 15. 后台任务（接宿主 jobs 服务）==')
 {
     const dir4 = mkdtempSync(join(tmpdir(), 'tk bash bg-'))

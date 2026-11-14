@@ -4,6 +4,22 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.1 — 2026-11-14（前台命令不再被宿主 tool-jobs 逐条注入完成通知）
+
+宿主 0.2.23 起带了 **`@deepseek-ai/dsh-tool-jobs`**：它给每个**有 owner** 的已结算 job 注入一条
+「上下文注入 · tool-jobs · … [status: …]」通知（这是给**后台任务**用的），并发布
+`job_output` / `job_kill` / `job_list` 三个工具 + 一段 `tool:jobs` system section。
+
+我们把**前台命令**也登记成有主 job（为了"单条可停"），于是每条命令都触发一条注入 —— 会话里肉眼可见
+一大串噪声，纯属重复（命令结果本来就在回执里）。
+
+- 前台 job 改为**不设 owner**（无主 job 仍然可被任何调用方 `read`/`kill`，`assertAccess` 对无主放行），
+  因此宿主不再为它投递完成通知；后台任务与超时晋升仍带 owner（那时的通知才是有用的）。
+- 结算后的移除改用 `caller = undefined`（与无主 job 一致）。
+- 新增回归：前台 `jobs.start` 必须**没有** `owner`，同时仍登记为 job。
+
+全量 **40 套件 / 1,671 断言**通过；`check-package` 62/62；schema 不变（35,732 B）。
+
 ## 0.11.0 — 2026-11-14（适配宿主 0.2.23-next / 内核 0.2.2-rc.3：参数 schema 的嵌套 required）
 
 DSH 升到 app `2.0.23-next` + 内核 `0.2.2-rc.3`。新内核改用**自己的 value-schema DSL** 编译工具参数，
