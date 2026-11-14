@@ -357,6 +357,18 @@ console.log('== 19b. 转后台时撤销 waiter（命令跑完要有完成通知�
     finally { bestEffortRm(dirW) }
 }
 
+console.log('== 19c. jobs.start 抛错时，晋升失败要回报真实原因 ==')
+{
+    const dirE = mkdtempSync(join(tmpdir(), 'tk bash start-error-'))
+    try {
+        const jobs = { start() { throw new Error('JOB_CONTROLLER_UNAVAILABLE: no controller') } }
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dirE, getJobs: () => jobs })[0]
+        const text = await def.execute({ command: 'sleep 5; echo x', timeoutMs: 300, description: 'start fails' }, { agent: { id: 'a1', session: { id: 's1' } } })
+        ok('晋升失败回执带真实原因', /kind=promoted/.test(text) && /JOB_CONTROLLER_UNAVAILABLE/.test(text), text.slice(0, 200))
+    }
+    finally { bestEffortRm(dirE) }
+}
+
 console.log('== 15. 后台任务（接宿主 jobs 服务）==')
 {
     const dir4 = mkdtempSync(join(tmpdir(), 'tk bash bg-'))

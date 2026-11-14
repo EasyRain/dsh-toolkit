@@ -4,6 +4,32 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.15 — 2026-11-14（审计 v0.9–v0.11.14：修 4 处，确认 3 处无误）
+
+逐块过了一遍这段时间的改动（沙箱闸门、编码探测、流式哈希、schema DSL 兼容、job 生命周期、下载挂 job）。
+
+**修的 4 处**
+
+1. **下载取消与完成撞车会误报 killed** —— `settleFromStatus()` 先看 `cancelledReason` 再读终态，
+   于是"刚好下完时点取消"会把一个**已完整**的下载报成 killed。改成先读终态：`done` 就是 completed。
+2. **`jobs.start` 失败原因被吞** —— 前台登记失败后，晋升失败只回一句"宿主没有可用的 jobs 服务"。
+   现在捕获真实原因（例如 `JOB_CONTROLLER_UNAVAILABLE`）并写进回执。
+3. **晋升结算回调可能冒 unhandled rejection** —— `result.live.done.then(settleAndDrop)` 补 `.catch`。
+4. **结算非幂等** —— 加了 `settledOnce`，重复结算不再重复 `jobs.remove`（后者会重试 40 次）。
+
+顺带清掉两处过时注释（文件头还写着"用系统 Git for Windows"、job 注释还写着"结算时消费一次读"）。
+
+**确认无误的 3 处**
+
+- **闸门的路径基准**：`file` 在调用闸门前已把 `path`/`to` 转绝对、`replace` 用**收集到的文件**过闸，
+  `download`/`session_export` 也是绝对路径 ⇒ 不存在"相对路径按 process.cwd 判错"的绕过。
+- **`checkpoint` 的 `getCtx` 链路**：`apply → tools(defineTool, {getCtx}) → prune/create` 全程有值，
+  `prune` 在只读会话确实被拒。
+- **`guard.js` 的根比较**：`writableRoots` 用 realpath 键、`isUnderPath` 用"父目录 realpath + 名字"键，
+  8.3 短名与长名混用不会误判。
+
+新增 1 条回归（晋升失败回报真实原因）。全量 **40 套件 / 1,687 断言**通过；`check-package` 62/62；schema 不变（36,020 B）。
+
 ## 0.11.14 — 2026-11-14（把 `timeoutMs` 的真实语义写进参数描述）
 
 行为不变，只修文档：参数说明原来写的是「Timeout in ms (default 60000)」，但前台的真实语义是
