@@ -4,6 +4,19 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.2 — 2026-11-14（0.11.0 的修复放错了位置：register 阶段已经太晚）
+
+0.11.0 把“去掉嵌套 required”放在了注册收口 （ 之前），
+但各段的写法是  —— ** 先跑**：它已经因为嵌套 required
+抛错，退回“schema 校验被禁用”的兜底，register 再洗已经晚了（描述里那句
+ 就是这么来的）。
+
+- 把清洗前移到 ：**defineTool 之前**先 ；
+- 兜底分支也补洗一次（）；
+- 新增回归：用一个“看到嵌套 required 就抛”的 strict defineTool 模拟宿主，断言不再抛错、描述没有污染后缀。
+
+全量 **40 套件 / 1,674 断言**通过； 62/62；schema 不变（35,732 B）。
+
 ## 0.11.1 — 2026-11-14（前台命令不再被宿主 tool-jobs 逐条注入完成通知）
 
 宿主 0.2.23 起带了 **`@deepseek-ai/dsh-tool-jobs`**：它给每个**有 owner** 的已结算 job 注入一条
