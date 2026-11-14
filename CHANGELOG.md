@@ -4,6 +4,23 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.3 — 2026-11-14（嵌套 required 的真正位置：字段映射的深度）
+
+0.11.2 把清洗挪到了 `defineTool` 之前，但重启后信标**仍然**报
+`parameters.ops.items.required is not supported`。再查发现清洗函数本身漏了一种形状：
+
+`ast_edit` / `file` 的 `parameters` 是**字段映射方言**（`{ 字段: {type, required:true} }`），
+我原来的实现只递归 `properties` / `items` 这些 JSON Schema 关键字，**没有递归字段映射里的普通键**，
+于是 `ops.items.required`、`verify.items.required` 原封不动地传给了宿主。
+
+- 改成**按深度**的通用递归：`required` 只在深度 ≤ 1 保留（根对象的数组 + 字段映射里每个字段的布尔），
+  更深的一律丢弃（数组 items 的对象及其 properties）；
+- 用模拟宿主 rc.3 的 strict `defineTool`（深度 > 1 有 `required` 就抛）验证 `ast_edit` 与 `file`
+  都能通过，且描述里没有 `[schema validation disabled: …]`。
+
+schema：`ast` 8,487 → **8,483 B**、`file` 4,714 → **4,728 B**，全量 **35,732 B**。
+全量 **40 套件 / 1,674 断言**通过；`check-package` 62/62。
+
 ## 0.11.2 — 2026-11-14（0.11.0 的修复放错了位置：register 阶段已经太晚）
 
 0.11.0 把「去掉嵌套 required」放在了注册收口 `sanitizeDefinition`（`ctx.tools.register` 之前），
