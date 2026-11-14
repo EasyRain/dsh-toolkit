@@ -4,6 +4,19 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.10 — 2026-11-14（下载任务收尾：结算后真的从列表移除 + 取消先礼后兵）
+
+真机跑下载任务时发现两个小问题：
+
+1. **结算后没从「后台任务」移除**：`jobs.remove(id, undefined)` 传的是无主 caller，而 job 有主
+   （session id）⇒ `assertAccess` 判 `JOB_FOREIGN_SESSION` 抛错，被 catch 静默吞掉 ⇒ 完成的下载一直挂在列表里。
+   改成传**同一个 ownerId**。
+2. **取消后状态是 `interrupted` 而不是 `cancelled`**：之前写完 `.cancel` 立刻 `kill`，worker 来不及收尾。
+   现在先写标志、**800 ms 后**再补刀（`child.exitCode === null` 才杀），worker 自己把状态写成 cancelled
+   并保留 `.part`。
+
+全量 **40 套件 / 1,681 断言**通过；`check-package` 62/62；schema 不变（35,857 B）。
+
 ## 0.11.9 — 2026-11-14（job 的 owner 要 session id，不是 Agent 对象）
 
 0.11.6 / 0.11.8 里我按宿主文档的 `owner: exec.agent` 传了 **Agent 对象**，真机一跑就暴露：
