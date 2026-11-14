@@ -94,6 +94,38 @@ for (const tool of registered) {
 ok('参数里没有嵌套 required（宿主 rc.3 DSL 不接受）', nestedRequired.length === 0, nestedRequired.slice(0, 5).join('；'))
 ok('根级 required 仍是字符串数组（严格 provider 契约）', requiredDrift.length === 0, requiredDrift.slice(0, 5).join('；'))
 
+// --- ⓪b 宿主 rc.3 的 value-schema DSL 规则（从 asar 里的 authorError 文案整理）---
+// 规则：type 白名单；不能同时 type+oneOf；oneOf ≥2；enum 非空标量；
+//       带 properties 的对象必须显式声明 additionalProperties 布尔；required 见上。
+function lintDslShape(node, where, out, depth = 0) {
+    if (node === null || typeof node !== 'object') return
+    if (Array.isArray(node)) { node.forEach((value, index) => lintDslShape(value, `${where}[${index}]`, out, depth)); return }
+    const hasType = Object.hasOwn(node, 'type')
+    const hasOneOf = Object.hasOwn(node, 'oneOf')
+    if (hasType && hasOneOf) out.push(`${where}: type 与 oneOf 不能同时声明`)
+    if (hasType && !['string', 'number', 'integer', 'boolean', 'null', 'array', 'object', 'json'].includes(node.type)) {
+        out.push(`${where}.type = ${JSON.stringify(node.type)}`)
+    }
+    if (hasOneOf && (!Array.isArray(node.oneOf) || node.oneOf.length < 2)) out.push(`${where}.oneOf 必须 ≥2 项`)
+    if (Object.hasOwn(node, 'enum')) {
+        if (!Array.isArray(node.enum) || node.enum.length === 0 || node.enum.some((v) => typeof v === 'object')) out.push(`${where}.enum 非法`)
+    }
+    if (Object.hasOwn(node, 'additionalProperties') && typeof node.additionalProperties !== 'boolean') {
+        out.push(`${where}.additionalProperties 必须是布尔`)
+    }
+    // 带 properties 的对象节点必须显式声明 additionalProperties（宿主原话：must be explicitly true or false）
+    if (Object.hasOwn(node, 'properties') && typeof node.additionalProperties !== 'boolean') {
+        out.push(`${where}.additionalProperties 未显式声明`)
+    }
+    for (const [key, value] of Object.entries(node)) {
+        if (key === 'required') continue
+        lintDslShape(value, `${where}.${key}`, out, depth + 1)
+    }
+}
+const dslDrift = []
+for (const tool of registered) lintDslShape(tool.parameters, `${tool.name}.parameters`, dslDrift)
+ok('参数满足宿主 rc.3 的 DSL 形状（type/oneOf/enum/additionalProperties）', dslDrift.length === 0, dslDrift.slice(0, 5).join('；'))
+
 // --- ① 静态 lint ------------------------------------------------------------
 /** 递归找"additionalProperties:false 但没 properties"的 object schema（宿主会拒收这类返回值） */
 function lintSchema(schema, where, out) {

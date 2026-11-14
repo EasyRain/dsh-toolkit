@@ -42,8 +42,8 @@
     {
       "name": "file",
       "family": "file",
-      "bytes": 4728,
-      "approximateTokens": 1182
+      "bytes": 4729,
+      "approximateTokens": 1183
     },
     {
       "name": "toolkit_help",
@@ -112,8 +112,8 @@
     },
     "file": {
       "tools": 1,
-      "bytes": 4728,
-      "approximateTokens": 1182
+      "bytes": 4729,
+      "approximateTokens": 1183
     },
     "help": {
       "tools": 1,
@@ -138,13 +138,13 @@
   },
   "total": {
     "tools": 15,
-    "bytes": 35732,
-    "approximateTokens": 8933
+    "bytes": 35733,
+    "approximateTokens": 8934
   },
   "resident": {
-    "toolSchemas": 35732,
+    "toolSchemas": 35733,
     "routingSection": 649,
-    "bytes": 36381,
+    "bytes": 36382,
     "approximateTokens": 9096
   },
   "routingSection": {

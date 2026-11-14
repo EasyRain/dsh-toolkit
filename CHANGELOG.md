@@ -4,6 +4,31 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.4 — 2026-11-14（DSL 还要求「带 properties 的对象显式声明 additionalProperties」）
+
+0.11.3 让 `ast_edit` 通过了，但 `file` 换了一个新错：
+
+```text
+parameters.edits.items.additionalProperties must be explicitly true or false
+```
+
+宿主 rc.3 的 DSL 除了 `required` 的深度限制，还有一条：**任何带 `properties` 的对象节点都必须显式写
+`additionalProperties: true|false`**（缺了就报上面那句）。我们从 asar 的 `authorError` 文案里把规则列全了：
+
+- `type` 白名单（string/number/integer/boolean/null/array/object/json）
+- 不能同时 `type` + `oneOf`；`oneOf` 至少 2 项
+- `enum` 必须是**非空标量**数组
+- 带 `properties` 的对象必须显式 `additionalProperties` 布尔
+- 属性映射里的 `required` 只能是 `true`（不能 `false`/数组）
+- 嵌套（深度 ≥2）不允许任何 `required`
+
+- `stripNestedRequired` 现在同时给"带 properties 的对象"补 `additionalProperties: false`（收紧，不允许额外字段）；
+- `output-contract` 新增一条 lint：把上述 DSL 规则逐条套在我们的 15 个工具参数上（`type`/`oneOf`/`enum`/`additionalProperties`），
+  以后不用等宿主重启才能发现。
+
+schema：`file` 4,728 → **4,729 B**，全量 **35,733 B**。
+全量 **40 套件 / 1,675 断言**通过；`check-package` 62/62。
+
 ## 0.11.3 — 2026-11-14（嵌套 required 的真正位置：字段映射的深度）
 
 0.11.2 把清洗挪到了 `defineTool` 之前，但重启后信标**仍然**报
