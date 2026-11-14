@@ -311,7 +311,7 @@ console.log('== 14e. 前台默认 10 秒转后台（长命令可在「后台任�
     finally { rmSync(dirP, { recursive: true, force: true }) }
 }
 
-console.log('== 14f. 前台命令不创建 job（避免控制器拒绝与逐条通知）==')
+console.log('== 14f. 前台命令一开始就登记 job（可见/可停），结算时消费读 + 移除 ==')
 {
     const dirF = mkdtempSync(join(tmpdir(), 'tk bash fg-owner-'))
     try {
@@ -320,7 +320,7 @@ console.log('== 14f. 前台命令不创建 job（避免控制器拒绝与逐条�
         const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dirF, getJobs: () => fakeJobs })[0]
         const text = await def.execute({ command: 'echo fg-hi', description: 'fg' }, { agent: { id: 'agent-1', session: { id: 's-1' } } })
         ok('前台命令正常执行', /exit code: 0/.test(text), text.slice(0, 120))
-        ok('前台命令**完全不创建 job**（无主会被控制器拒绝，有主会被逐条注入通知）', captured === null, JSON.stringify(captured))
+        ok('前台命令登记 job，且带 session id 作为 owner', captured?.kind === 'bash' && captured?.owner === 's-1', JSON.stringify(captured?.owner))
     }
     finally { rmSync(dirF, { recursive: true, force: true }) }
 }
@@ -457,11 +457,19 @@ console.log('== 19. 中途晋升为后台（ops 的 promoted 语义）==')
 
         let fgStarts = 0
         let removedJob = null
-        const jobs2 = { start() { fgStarts += 1; return 'job-fg' }, remove(id) { removedJob = id } }
+        let readCalls = 0
+        let capturedFg = null
+        const jobs2 = {
+            start(options) { fgStarts += 1; capturedFg = options; return 'job-fg' },
+            read() { readCalls += 1; return { chunks: [], job: { status: 'completed' } } },
+            remove(id) { removedJob = id },
+        }
         const defFg = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6, getJobs: () => jobs2 })[0]
-        const fgText = await defFg.execute({ command: 'echo hi' })
-        ok('前台命令不登记 job（只有晋升时才登记）', fgStarts === 0 && /ok=true/.test(fgText), JSON.stringify({ fgStarts }))
-        ok('因此也没有移除动作', removedJob === null, JSON.stringify({ removedJob }))
+        const fgText = await defFg.execute({ command: 'echo hi' }, { agent: { id: 'a1', session: { id: 's-run' } } })
+        ok('前台命令一开始就登记 job（立刻可见、可停）', fgStarts === 1 && capturedFg?.kind === 'bash' && /ok=true/.test(fgText), JSON.stringify({ fgStarts }))
+        ok('前台 job 的 owner 是 session id', capturedFg?.owner === 's-run', JSON.stringify(capturedFg?.owner))
+        ok('结算时先消费一次读（抑制 tool-jobs 通知）', readCalls >= 1, String(readCalls))
+        ok('随后从任务列表移除', removedJob === 'job-fg', JSON.stringify({ removedJob }))
         const def2 = tools((tool) => tool, { resolveWorkspaceCwd: () => dir6 })[0]
         const killed = await def2.execute({ command: 'sleep 5', timeoutMs: 300 })
         ok('没有 jobs 服务时仍按超时杀掉', /timedOut=true/.test(killed), killed.slice(0, 140))
@@ -647,11 +655,11 @@ console.log('== 23. 会话/agent 销毁时收尾活任务 ==')
         off()
 
         let removeCalls = 0
-        const jobs3 = { start() { return 'job-r' }, remove() { removeCalls += 1 } }
+        const jobs3 = { start() { return 'job-r' }, read() { return { chunks: [] } }, remove() { removeCalls += 1 } }
         const defR = tools((tool) => tool, { resolveWorkspaceCwd: () => dir9, getJobs: () => jobs3 })[0]
         await defR.execute({ command: 'echo retry-drop' }, { agent: { id: 'a1', session: { id: 's2' } } })
         await new Promise((resolve) => setTimeout(resolve, 300))
-        ok('前台执行不产生 job ⇒ 也不调用 remove', removeCalls === 0, String(removeCalls))
+        ok('前台 job 结算后也会被移除', removeCalls >= 1, String(removeCalls))
     }
     finally { bestEffortRm(dir9) }
 }
@@ -698,11 +706,11 @@ console.log('== 25. 宿主 subprocess 路径（spawn/终止/输出交给宿主�
     // 执行器内部异常（宿主句柄 done 直接 reject）：不能把异常抛给上层，也不该留下 job。
     const rejecting = { spawn() { return { collected: { stdout: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) }, stderr: { readFrom: () => ({ text: '', nextOffset: 0, lossy: false }) } }, done: Promise.reject(new Error('boom')), terminate() {} } } }
     const removedIds = []
-    const jobsBroken = { start() { return 'job-broken' }, remove(id) { removedIds.push(id) } }
+    const jobsBroken = { start() { return 'job-broken' }, read() { return { chunks: [] } }, remove(id) { removedIds.push(id) } }
     const defBroken = bashModule.tools((tool) => tool, { subprocess: rejecting, getJobs: () => jobsBroken, resolveWorkspaceCwd: () => tmpdir(), ...(TEST_BASH === null ? {} : { bashPath: TEST_BASH }) })[0]
     const brokenText = await defBroken.execute({ command: 'x', description: 'broken' })
     ok('执行器内部异常 ⇒ SPAWN_FAILED 而不是抛给上层', /\[failure: SPAWN_FAILED/.test(brokenText), brokenText.slice(-160))
-    ok('异常路径没有留下 job（前台不登记）', removedIds.length === 0, JSON.stringify(removedIds))
+    ok('异常路径也会把已登记的 job 收尾掉（读 + 移除）', removedIds.includes('job-broken') || removedIds.length > 0, JSON.stringify(removedIds))
 
     let liveText = 'partial\n'
     const liveReader = { readFrom(from) { return { text: liveText.slice(from), nextOffset: liveText.length, lossy: false } } }
