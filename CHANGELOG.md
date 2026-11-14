@@ -4,6 +4,18 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.14 — 2026-11-14（把 `timeoutMs` 的真实语义写进参数描述）
+
+行为不变，只修文档：参数说明原来写的是「Timeout in ms (default 60000)」，但前台的真实语义是
+**"愿意阻塞多久，到点转后台"**，默认 10 秒（`promoteAfterMs`）。用户正是看着这句以为"有些命令不吃 10 秒规则"。
+
+新的说明：
+
+> How long to block before the command is promoted to a background job (foreground default 10000, max …);
+> passing a larger value blocks longer, and with run_in_background it is the kill timeout instead.
+
+schema：`shell` 2,414 → **2,577 B**，全量 **36,020 B**。全量 **40 套件 / 1,686 断言**通过；`check-package` 62/62。
+
 ## 0.11.13 — 2026-11-14（转后台的命令要收到完成通知）
 
 核对了宿主的机制：`dsh-tool-jobs` 在 job 结算时会给 owner 投递一条
