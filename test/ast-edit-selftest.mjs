@@ -503,6 +503,37 @@ console.log('== 14. 写入锁 + effectState（照 dsh-ops 抄的两条）==')
     ok('中止时报错且不写文件', aborted !== null && /abort/i.test(aborted.message) && readFileSync(AB, 'utf8') === 'const z = 1\n', String(aborted?.message ?? '').slice(0, 40))
 }
 
+// ── MCMOD 反馈回归（2026-11-15）─────────────────────────────────────────
+console.log('== 26. 批量改名反馈：二进制不占预算 / 转义变体提示 / UTF-16 明确跳过 ==')
+{
+    const B = `${WS}/bulk`
+    mkdirSync(`${B}/dumps`, { recursive: true })
+    // ① 250 个 .class + 5 个 .txt：二进制不该吃 maxFiles（默认 200）
+    for (let i = 0; i < 250; i += 1) writeFileSync(`${B}/dumps/c${i}.class`, Buffer.from([0xca, 0xfe, 0xba, 0xbe, 0]))
+    for (let i = 0; i < 5; i += 1) writeFileSync(`${B}/t${i}.txt`, 'OLDNAME here\n')
+    const budget = await call({ action: 'preview', mode: 'literal', ops: [{ pat: 'OLDNAME', out: 'NEWNAME' }], paths: [B] })
+    ok('二进制不占文件预算：5 个 txt 全部扫到', budget.filesSearched === 5, String(budget.filesSearched))
+    ok('limitReached 为 false', budget.limitReached === false, String(budget.limitReached))
+    ok('跳过的二进制数量写进回执（不静默）', /跳过 250 个二进制文件/.test(String(budget.message)), String(budget.message).split('\n')[1]?.slice(0, 60) ?? '')
+
+    // ② 0 命中的 literal 规则：报出转义变体 + 位置（正斜杠规则 vs 反斜杠正文）
+    const V = `${WS}/variant`
+    mkdirSync(V, { recursive: true })
+    writeFileSync(`${V}/single.txt`, 'D:\\x\\MCMOD\n')
+    writeFileSync(`${V}/double.txt`, 'D:\\\\x\\\\MCMOD\n')
+    const variant = await call({ action: 'preview', mode: 'literal', ops: [{ pat: 'D:/x/MCMOD', out: 'D:/x/New' }], paths: [V] })
+    ok('0 命中时报出转义变体（含位置）', /转义变体/.test(String(variant.message)) && /single\.txt:1/.test(String(variant.message)), String(variant.message).split('\n').find((l) => /转义变体/.test(l))?.slice(0, 90) ?? '(无)')
+    ok('变体提示只出现一次（Note 去重）', (String(variant.message).match(/转义变体/g) ?? []).length === 1, String((String(variant.message).match(/转义变体/g) ?? []).length))
+
+    // ③ UTF-16 文件：明确报编码，而不是 "looks binary"
+    const U = `${WS}/utf16`
+    mkdirSync(U, { recursive: true })
+    writeFileSync(`${U}/u.txt`, Buffer.from('\uFEFF' + 'OLDNAME here\n', 'utf16le'))
+    const utf16 = await call({ action: 'preview', mode: 'literal', ops: [{ pat: 'OLDNAME', out: 'NEWNAME' }], paths: [U] })
+    ok('UTF-16 明确报编码并指向 file replace', /utf16le/.test(String(utf16.message)) && /file replace/.test(String(utf16.message)), String(utf16.message).split('\n').pop()?.slice(0, 90) ?? '')
+    ok('不再伪装成二进制', !/looks binary/.test(String(utf16.message)))
+}
+
 rmSync(WS, { recursive: true, force: true })
 console.log(failures === 0 ? '\nALL PASS' : `\n${failures} FAILURE(S)`)
 process.exit(failures === 0 ? 0 : 1)

@@ -42,6 +42,17 @@
 - **生命周期收尾**：会话/agent 销毁（`session/disposed`/`agent/disposed`）时把还活着的任务 kill 掉 —— promoted 的后台命令不会在会话结束后残留。
 - **可取消**（重要）：前台/后台命令**都会先登记成宿主 job**（后台任务列表里能看到，可以只停这一条而不结束会话）；正常结束自动移除，到点未完成则留在列表里（promoted）。宿主的 `exec.signal`（点「停止」/结束会话）会走两路杀进程树 + **主动关管道**（防止凭据管理器/ssh 搵着写端让 `close` 不触发），回执带 `[aborted]` + `failure: CANCELLED`。git 这类可能等凭据的命令固定 `GIT_TERMINAL_PROMPT=0`、`GCM_INTERACTIVE=never`：需要凭据时**直接失败**，不会弹窗/挂住。
 - **落盘上限**：spill 预算（默认 **64 MB**，可用 `maxSpillBytes` 调低）随 spawn 一起交给宿主；溢出时宿主标记 lossy，回执带 `truncated` 与 `spillPath`。
+
+### 批量改写的边界
+
+- **`ast_edit` 文件预算 200 / `file replace` 单次 1000 个文件**。采集阶段会**按扩展名跳过已知二进制**
+  （`.class/.jar/.png/.zip/.exe/...`），**不占文件预算**，跳过的数量会写进回执；显式把某个文件写进 `paths` 时不会被过滤。
+- **`ast_edit` 采集到上限时**：预览标"扫描样本不完整"，apply **不再**用覆盖率硬拒（只提示），
+  因为"还剩几处没改到"在不完整样本上不可信。
+- **`literal` 的形态**：严格字面匹配。某条规则 0 命中且 pattern 含 `/` 或 `\` 时，工具会报出**转义变体**
+  （`\x` / `x` / `\\x`）与首个位置——但**不会**自动合并形态，要一起改就再加一条规则。
+- **残留行号**取自**改写后**文本（那才是真残留）；若残留位于被跳过的文件（如 UTF-16），只报数量并说明原因。
+- **编码**：`file replace` 支持 UTF-8/UTF-16/GB18030 等；`ast_edit` 只写回 UTF-8，其它编码会**明确报编码并跳过**。
 - **失败契约**（照 ops）：失败时回执追加 `[failure: CODE; effects: none|unknown; retry: never|after-input-change|after-config-change] nextAction`；常见 CODE：`EXECUTOR_UNAVAILABLE` / `SANDBOX_UNAVAILABLE` / `SANDBOX_DENIED` / `TIMEOUT` / `EXIT_NONZERO` / `CANCELLED` / `SPAWN_FAILED`。
 - **输出**：默认上限 2 MB，超出置 `truncated:true`，并把**完整输出落盘**（回执给 `spillPath`，用 `file read` 分段看）；stdout/stderr 原样回显，不做转义，`ok` 只在退出码 0 且未超时时为真。**首行不带 bash 路径**（运行时已固定，只在 `includeDiagnostics` 的 `diagnostics: bash=…` 里给）；**空输出不占行**（哪一路没内容就不打那一段，也不再写 `(empty)`）；末行固定是 `[exit code: N]` 或 `[killed by signal: X]`（宿主 terminal 卡片靠它解析）。
 - **参数面（与 ops_bash 对齐）**：`command` / `script_path`（跑现成 `.sh`，与 `command` 二选一）/ `description` / `cwd` / `workdir`（`cwd` 的别名，同时给时 `cwd` 优先）/ `timeoutMs` / `graceMs`（先温和终止，等这么久再强杀整棵树，默认 250 ms）/ `includeDiagnostics`。

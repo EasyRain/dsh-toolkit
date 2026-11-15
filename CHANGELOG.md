@@ -4,6 +4,29 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.12.0 — 2026-11-15（批量改名实战反馈：4 处修复 + 1 处明确取舍）
+
+来自 Minecraft 工作区改名的使用方反馈（评估的是 v0.3.0，但 5 条里 4 条在 0.12.0 前**依然成立**）。逐条处置：
+
+- **二进制不再吃文件预算**（P1）：`lib/glob.js` 在 **walker 内部、预算判断之前**按扩展名跳过已知二进制
+  （class/jar/png/zip/exe/dll/pyc/字体/音视频/权重…），跳过数量写进回执；显式写进 `paths` 的单文件仍会被采纳。
+  以前 `.class` 先把 200 的预算吃光 ⇒ 文本文件没扫全 ⇒ 覆盖率闸门在**不完整样本**上判"还有 1 处没改到"并拒绝 apply。
+- **采集被截断时不再硬拒 apply**（P1）：`limitReached` 时覆盖率只提示、不阻断，预览标"扫描样本不完整"。
+- **`file replace` 单次上限 50 → 1000**（P1）：187 文件/1019 处可以一次跑完（`maxMatches` 等资源闸门不变）。
+- **残留行号改为取自"改写后"文本**（P2）：以前给的是"原文全部出现位置"，会指向**已经改好的行**；
+  只有 `out` 自己含 `pat`（保留锚点式改写）时才退回原文并注明。
+- **`literal` 0 命中时报告转义变体**（P2）：Windows 路径的 `\x` / `x` / `\\x` 三形态，
+  以前只能自己 `grep -o` 才发现；现在回执直接给变体 + 首个位置（**不自动合并**，避免静默连带改）。
+- **`ast_edit` 按实际编码读取**（P3）：UTF-16/GB18030 不再被当成 "looks binary" 静默跳过，
+  而是明确报编码并指向 `file replace`（写回仍只支持 UTF-8）。
+- 顺带：`Note:` 行去重；`docs/TOOLKIT.md` 新增"批量改写的边界"小节。
+
+**明确不做的**：`variants:true` 自动展开三形态（理由见评估文档）、`ast_edit` 写回非 UTF-8。
+
+评估与验收清单：`sessions/dsh-plugin/docs/2026-11-15-bulk-rewrite-review/EVALUATION.md`（原始反馈也在同目录，已移出插件包）。
+
+新增回归 5 条（§26 + replace 60 文件）。全量 **40 套件 / 1,696 断言**通过；`check-package` 62/62；schema 不变（36,232 B）。
+
 ## 0.11.17 — 2026-11-15（晋升窗口 10 s → 60 s；描述改为"分三种意图"）
 
 按实际习惯调整：**前台调用本来就应该阻塞到结果**，10 秒就转后台反而逼着模型再花一次 `job_output` 往返。

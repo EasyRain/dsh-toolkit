@@ -183,6 +183,17 @@ try {
         ok('0 命中时说明二进制被跳过（不能静默）', /二进制文件，跳过/.test(text), text)
     }
 
+    console.log('== 4b. replace 单次能覆盖 60 个文件（旧上限 50 已放宽到 1000）==')
+    {
+        const many = join(dir, 'many')
+        mkdirSync(many, { recursive: true })
+        for (let i = 0; i < 60; i += 1) writeFileSync(join(many, `f${i}.txt`), `OLD-${i}\n`)
+        const tool = tools((def) => def, { resolveWorkspaceCwd: () => dir })[0]
+        const text = await tool.execute({ action: 'replace', paths: [many], pattern: 'OLD-', replacement: 'NEW-' })
+        ok('一次调用改完 60 个文件（不再分批）', /60 个文件/.test(String(text.message ?? text)), String(text.message ?? text).split('\n')[0]?.slice(0, 90))
+        ok('没有「达到上限 50」的截断提示', !/上限 50/.test(String(text.message ?? text)))
+    }
+
     console.log('== 5. effectState（失败时区分"没生效 / 已生效 / 不确定"）==')
     {
         const text = renderOpResult({ ok: false, action: 'write', path: 'x', message: 'CAS 失败' })
