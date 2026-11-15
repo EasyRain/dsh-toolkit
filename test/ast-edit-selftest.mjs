@@ -289,7 +289,8 @@ console.log('== 审计第四轮回归（符号链接 / 0 改动 / 逐 op / 消�
     }
 
     const zero = await call({ action: 'preview', ops: [{ pat: 'NOTHING_AT_ALL($$$)', out: 'x' }], paths: ['src/b.ts'] })
-    ok('0 改动的预览不入栈（不顶掉真正要用的提案）', zero.stagedId === null && zero.message.includes('没有入栈'), String(zero.stagedId))
+    // stagedId 是**可选**字段：0 改动时直接省略（不能返回 null —— schema 是 string，宿主会判 invalid output）
+    ok('0 改动的预览不入栈（不顶掉真正要用的提案）', !Object.hasOwn(zero, 'stagedId') && zero.message.includes('没有入栈'), JSON.stringify(zero.stagedId))
 
     const perOp = await call({ action: 'preview', ops: [{ pat: 'const $A = $B;', out: 'let $A = $B;' }, { pat: 'NOTHING_AT_ALL($$$)', out: 'y' }], paths: ['src/b.ts'] })
     ok('逐 op 命中统计：0 命中的规则被点名', /命中 0 处/.test(perOp.message), (perOp.message.split('\n').find((l) => l.includes('命中 0 处')) ?? '').slice(0, 50))
@@ -541,6 +542,21 @@ console.log('== 26. 批量改名反馈：二进制不占预算 / 转义变体提
     ok('三种形态各自保持原风格', readFileSync(`${VT}/back.txt`, 'utf8').startsWith(String.raw`D:\Work\Minecraft`)
         && readFileSync(`${VT}/fwd.txt`, 'utf8').startsWith('D:/Work/Minecraft')
         && readFileSync(`${VT}/esc.txt`, 'utf8').startsWith(String.raw`D:\\Work\\Minecraft`))
+
+    // ②c 复核 A/B（2026-11-15 二轮）：literal 行号 1-based 正确 + 0 命中不得返回 stagedId:null
+    const OB = `${WS}/offbyone`
+    mkdirSync(OB, { recursive: true })
+    writeFileSync(`${OB}/c.txt`, 'L1 x\nL2 x\nL3 ' + String.raw`D:\Old\Path` + '\n')
+    const ob = await call({ action: 'preview', mode: 'literal', wordBoundary: false, paths: [OB], ops: [{ pat: String.raw`D:\Old\Path`, out: String.raw`D:\New\Root` }] })
+    ok('literal 行号是 1-based（第 3 行显示 3）', ob.changes?.[0]?.line === 3, JSON.stringify(ob.changes?.[0]))
+    ok('literal 列号是 1-based（第 4 列显示 4）', ob.changes?.[0]?.column === 4, JSON.stringify(ob.changes?.[0]))
+
+    const OS = `${WS}/only_suffix`
+    mkdirSync(OS, { recursive: true })
+    writeFileSync(`${OS}/b.txt`, 'bad: D:\\\\Old\\\\PathSuffix\\n')
+    const suffix = await call({ action: 'preview', mode: 'literal', paths: [OS], ops: [{ pat: String.raw`D:\Old\Path`, out: String.raw`D:\New\Root` }] })
+    ok('0 命中时**不返回** stagedId（null 会被宿主判 invalid output）', !Object.hasOwn(suffix, 'stagedId'), JSON.stringify(Object.keys(suffix)))
+    ok('0 命中仍给可读回执', suffix.totalReplacements === 0 && /No replacements made/.test(String(suffix.message)), String(suffix.message).slice(0, 50))
 
     // ③ UTF-16 文件：明确报编码，而不是 "looks binary"
     const U = `${WS}/utf16`

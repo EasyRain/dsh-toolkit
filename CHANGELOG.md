@@ -4,6 +4,24 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.12.2 — 2026-11-15（复核报告的两处新缺陷：literal 行号 +1、0 命中返回 null stagedId）
+
+使用方对 0.12.1 做了真实工具面复核（结论：①②③⑤ 通过、④ 通过），并新报两处缺陷，都已修：
+
+- **【A】`literal` 的行号整体 +1**：`literalMatches` 算出的 `line` 已经是 **1-based**，而 `toValue()` 又统一 +1
+  （它按 NAPI 的 0-based 口径写的）⇒ 单行文件的第 1 行显示成 `2:`。现在 `literalMatches` 返回 **0-based**，
+  由 `toValue` 统一转 1-based；`structural` 路径不受影响（原本就正确）。
+- **【B】0 命中时返回 `stagedId: null` 违反 output schema** ⇒ 宿主判
+  `invalid output: "value.stagedId" must be a string`，**整次调用失败**，模型连"命中 0 处"的说明都拿不到。
+  `stagedId` 本来就是可选字段 ⇒ 0 命中时**省略**（apply 侧照旧按"没有入栈"处理）。
+
+顺带按复核建议扫了一遍同类风险：其余 14 个工具的 `output.schema` 根类型都是 `string` 或裸 `array`
+（`ast_test_rule` 的 items 没有类型约束），不存在同类的 null-违反-typed-field 路径；`ast_edit` 是唯一的对象输出。
+
+新增回归 4 条（literal 行号/列号 1-based、0 命中不返回 stagedId、0 命中仍有可读回执）。
+
+全量 **40 套件 / 1,703 断言**通过；`check-package` 62/62；schema 不变（36,571 B）。
+
 ## 0.12.1 — 2026-11-15（`ast_edit` 增加 `variants:true`：一条规则覆盖三种转义形态）
 
 0.12.0 只做了"0 命中时报变体"的提示。按反馈补上**显式开关**：
