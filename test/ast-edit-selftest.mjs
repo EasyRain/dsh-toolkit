@@ -558,6 +558,14 @@ console.log('== 26. 批量改名反馈：二进制不占预算 / 转义变体提
     ok('0 命中时**不返回** stagedId（null 会被宿主判 invalid output）', !Object.hasOwn(suffix, 'stagedId'), JSON.stringify(Object.keys(suffix)))
     ok('0 命中仍给可读回执', suffix.totalReplacements === 0 && /No replacements made/.test(String(suffix.message)), String(suffix.message).slice(0, 50))
 
+    // ②d 复核反馈（可选提示）：0 命中时提示要按模式分支（literal 不该指 ast_test_rule）
+    const lit0 = await call({ action: 'preview', mode: 'literal', paths: [OS], ops: [{ pat: String.raw`D:\Old\Path`, out: 'X' }] })
+    ok('literal 0 命中：提示查转义形态/wordBoundary，而不是 ast_test_rule',
+        /严格字面匹配/.test(String(lit0.message)) && /variants:true/.test(String(lit0.message)) && !/先用 ast_test_rule 验证/.test(String(lit0.message)),
+        String(lit0.message).split('\n')[1]?.slice(0, 90) ?? '')
+    const st0 = await call({ action: 'preview', mode: 'structural', paths: [OS], ops: [{ pat: 'NOTHING_AT_ALL($$$)', out: 'X' }] })
+    ok('structural 0 命中：仍提示 ast_test_rule', /先用 ast_test_rule 验证/.test(String(st0.message)), String(st0.message).split('\n').find((l) => /命中 0 处/.test(l))?.slice(0, 60) ?? '')
+
     // ③ UTF-16 文件：明确报编码，而不是 "looks binary"
     const U = `${WS}/utf16`
     mkdirSync(U, { recursive: true })

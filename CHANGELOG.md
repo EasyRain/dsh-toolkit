@@ -4,6 +4,20 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.12.3 — 2026-11-15（0 命中提示按模式分支：literal 不再让你去跑 ast_test_rule）
+
+复核报告里"最后一条可选提示"：0 命中的回执写着"先用 ast_test_rule 验证"，但那个工具**只吃 AST 规则**，
+对 `literal` 帮不上。改成按模式分支：
+
+- **literal 0 命中**：`literal mode is a strict byte-for-byte match: check escape variants \`\\\\\` / \`/\` / \`\\\\\\\\\`, or wordBoundary`
+  + 逐规则提示"先查转义形态 / wordBoundary；要一次覆盖三种形态用 `variants:true`"，
+  并明说 **`ast_test_rule` 只验证 AST 规则，对 literal 没有帮助**。
+- **structural 0 命中**：维持原来的 `ast_test_rule` 提示（那里它确实有用）。
+- 覆盖情况里的"出现 N 次但一次都没命中"同样按模式分支（literal 给三个可疑点：转义形态 / wordBoundary / 换行引号差异）。
+
+新增回归 2 条（literal 不再出现"先用 ast_test_rule 验证"、structural 仍然提示它）。
+全量 **40 套件 / 1,705 断言**通过；`check-package` 62/62；schema 不变（36,571 B）。
+
 ## 0.12.2 — 2026-11-15（复核报告的两处新缺陷：literal 行号 +1、0 命中返回 null stagedId）
 
 使用方对 0.12.1 做了真实工具面复核（结论：①②③⑤ 通过、④ 通过），并新报两处缺陷，都已修：
