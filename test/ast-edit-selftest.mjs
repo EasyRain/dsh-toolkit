@@ -525,6 +525,23 @@ console.log('== 26. 批量改名反馈：二进制不占预算 / 转义变体提
     ok('0 命中时报出转义变体（含位置）', /转义变体/.test(String(variant.message)) && /single\.txt:1/.test(String(variant.message)), String(variant.message).split('\n').find((l) => /转义变体/.test(l))?.slice(0, 90) ?? '(无)')
     ok('变体提示只出现一次（Note 去重）', (String(variant.message).match(/转义变体/g) ?? []).length === 1, String((String(variant.message).match(/转义变体/g) ?? []).length))
 
+    // ②b variants:true：一条规则覆盖三种转义形态（后果要在预览里说清）
+    const VT = `${WS}/variants`
+    mkdirSync(VT, { recursive: true })
+    const rawPat = String.raw`D:\Work\MCMOD`
+    const rawOut = String.raw`D:\Work\Minecraft`
+    writeFileSync(`${VT}/back.txt`, String.raw`D:\Work\MCMOD` + '\n')
+    writeFileSync(`${VT}/fwd.txt`, 'D:/Work/MCMOD\n')
+    writeFileSync(`${VT}/esc.txt`, String.raw`D:\\Work\\MCMOD` + '\n')
+    const opsV = [{ pat: rawPat, out: rawOut, variants: true }]
+    const vp = await call({ action: 'preview', mode: 'literal', ops: opsV, paths: [VT] })
+    ok('variants:true 一次覆盖三种形态（3 处）', vp.totalReplacements === 3, String(vp.totalReplacements))
+    ok('预览明确说明会一并替换 3 种形态', /一并替换了 3 种转义形态/.test(String(vp.message)), String(vp.message).split('\n').find((l) => /variants:true/.test(l))?.slice(0, 80) ?? '')
+    await call({ action: 'apply', stagedId: vp.stagedId, ops: opsV })
+    ok('三种形态各自保持原风格', readFileSync(`${VT}/back.txt`, 'utf8').startsWith(String.raw`D:\Work\Minecraft`)
+        && readFileSync(`${VT}/fwd.txt`, 'utf8').startsWith('D:/Work/Minecraft')
+        && readFileSync(`${VT}/esc.txt`, 'utf8').startsWith(String.raw`D:\\Work\\Minecraft`))
+
     // ③ UTF-16 文件：明确报编码，而不是 "looks binary"
     const U = `${WS}/utf16`
     mkdirSync(U, { recursive: true })

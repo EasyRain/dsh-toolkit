@@ -49,8 +49,11 @@
   （`.class/.jar/.png/.zip/.exe/...`），**不占文件预算**，跳过的数量会写进回执；显式把某个文件写进 `paths` 时不会被过滤。
 - **`ast_edit` 采集到上限时**：预览标"扫描样本不完整"，apply **不再**用覆盖率硬拒（只提示），
   因为"还剩几处没改到"在不完整样本上不可信。
-- **`literal` 的形态**：严格字面匹配。某条规则 0 命中且 pattern 含 `/` 或 `\` 时，工具会报出**转义变体**
-  （`\x` / `x` / `\\x`）与首个位置——但**不会**自动合并形态，要一起改就再加一条规则。
+- **`literal` 的形态**：默认严格字面匹配。某条规则 0 命中且 pattern 含 `/` 或 `\` 时，工具会报出**转义变体**
+  （`\x` / `x` / `\\x`）与首个位置。
+- **`variants: true`**（每规则开关，默认关）：同一条规则**一并命中三种转义形态**，`out` 用**同一分隔符风格**
+  （`/` 形态改成 `/`，`\\` 形态改成 `\\`）。预览里会写明"本条一并替换了 N 种转义形态"并逐个列出——
+  这是替你改掉没逐条指定的写法，改名场景通常正是要全改，只想改一种就别开。
 - **残留行号**取自**改写后**文本（那才是真残留）；若残留位于被跳过的文件（如 UTF-16），只报数量并说明原因。
 - **编码**：`file replace` 支持 UTF-8/UTF-16/GB18030 等；`ast_edit` 只写回 UTF-8，其它编码会**明确报编码并跳过**。
 - **失败契约**（照 ops）：失败时回执追加 `[failure: CODE; effects: none|unknown; retry: never|after-input-change|after-config-change] nextAction`；常见 CODE：`EXECUTOR_UNAVAILABLE` / `SANDBOX_UNAVAILABLE` / `SANDBOX_DENIED` / `TIMEOUT` / `EXIT_NONZERO` / `CANCELLED` / `SPAWN_FAILED`。
