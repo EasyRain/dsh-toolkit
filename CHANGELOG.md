@@ -4,6 +4,22 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.11.17 — 2026-11-15（晋升窗口 10 s → 60 s；描述改为"分三种意图"）
+
+按实际习惯调整：**前台调用本来就应该阻塞到结果**，10 秒就转后台反而逼着模型再花一次 `job_output` 往返。
+另外"手动晋升"这个动作在前台模型里根本不存在（调用是阻塞的，到点才有晋升），所以描述里也不该暗示它。
+
+- `DEFAULTS.promoteAfterMs` 10,000 → **60,000**（与 `timeoutMs` 默认一致；`DSH_TOOLKIT_PROMOTE_AFTER_MS` 仍可覆盖）；
+- 描述改成**区分三种意图**，不再写成命令式规定：
+  ① 前台阻塞（默认）——结果内联；
+  ② 以为很快、实际很久——60 秒仍没跑完就转后台，回执给 `jobId`（之后 `job_output { wait:true }` 取或 `job_kill` 停）；
+  ③ 一开始就不需要结果（dev server / 守护进程）——直接 `run_in_background`；
+  并明确：**故意等已知长命令就调大 `timeoutMs`**，而不是"先转后台再取"。
+- 晋升回执的提示同步改成"要等结果用 `job_output { wait:true }`；可预见的长命令直接带 `timeoutMs`，或一开始就用 `run_in_background`"。
+
+schema：`shell` 3,012 → **2,789 B**（描述更紧凑），全量 **36,232 B**；按需文档 72,303 B。
+全量 **40 套件 / 1,692 断言**通过；`check-package` 62/62。
+
 ## 0.11.16 — 2026-11-15（把「长命令请带 timeoutMs」写成可执行的指引）
 
 新会话反复踩的坑：不设 `timeoutMs` → 10 秒转后台 → 再花一次 `job_output { wait: true }` 才能拿到结果。
