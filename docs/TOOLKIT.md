@@ -29,6 +29,7 @@
 - **非交互**：stdin 关闭，`read`/`sudo`/`ssh` 这类提示会挂到超时（默认 60 s，最大 600 s）。超时**杀整棵进程树**：先杀 MSYS 进程组（`kill -9 -<pgid>`），再用 `taskkill /T /F` 兜底 —— 只 `child.kill()` 会留孙进程；而 MSYS `fork` 出来的子进程连 `taskkill /T` 都抓不到（它的 Windows PPID 指向已退出的辅助进程），所以必须两路一起。
 - **环境净化（照 ops）**：给子进程固定 `NO_COLOR=1`、`TERM=dumb`、`PAGER=cat`、`GIT_PAGER=cat`、`LC_MESSAGES=C`、`LC_ALL=C.UTF-8` —— 没有 ANSI 序列、不会被 `less` 挂住、错误消息保持英文可解析；`C.UTF-8` 同时保证 `wc -m` 按**字符**而不是字节数中文。
 - **超时 = 中途晋升**（照 ops 的 `promoted`）：前台命令到 `timeoutMs` 仍在跑时**不杀**，转成宿主后台任务，回执 `kind=promoted` + `jobId` + 已产生的部分输出；之后用 `job_output` 读、`job_kill` 停。没有 `jobs` 服务时才退回「杀整棵树 + `timedOut`」。
+- **`timeoutMs` 是"愿意阻塞多久"，默认 10 秒**（`DEFAULTS.promoteAfterMs`，`DSH_TOOLKIT_PROMOTE_AFTER_MS` 可改）：不传的话，超过 10 秒的命令会被转后台，模型得再花一次 `job_output { wait:true }` 才能拿到结果。**预判会超过 10 秒的命令（构建、安装、测试套件、CI 轮询、大文件拷贝）应当直接带 `timeoutMs`（如 600000）**，这样调用原地阻塞、结果内联返回；期间任务列表里照样能看到、能单停。
 - **执行层（宿主托管）**：spawn/终止升级（PGID + taskkill）/输出预算/spill/管道生命周期全部交给 `ctx.subprocess.spawn`，本工具只负责"选 bash、组织 argv、渲染"；宿主服务缺失时明确报 `EXECUTOR_UNAVAILABLE`，不再有自建 spawn 后备。自测用同契约的本地替身（`test/support/local-subprocess.mjs`）。
 - **退出码与信号**：回执给命令的**真实退出码**（0/1/2/127/128…）；Windows 上被信号杀掉的进程会以 `signal<<8` 形式返回（SIGTERM=3840、SIGKILL=2304 等），这里还原成 `signal=SIGTERM` 并显示 `[killed by signal: SIGTERM]`，同时保留 `rawExitCode`。
 - **后台参数对齐宿主**：`run_in_background`（宿主同名，UI 据此显示后台卡片）；`background` 保留为**别名**。后台运行**不设执行超时**（除非显式给 `timeoutMs`），避免长任务被默认 60 s 杀掉。
