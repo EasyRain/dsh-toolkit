@@ -539,7 +539,8 @@ console.log('== 20. spill 上限 + 结构化失败 ==')
         const timed = await def.execute({ command: 'sleep 5', timeoutMs: 300 })
         ok('超时失败带 failure=TIMEOUT', /\[failure: TIMEOUT; effects: unknown; retry: after-input-change\]/.test(timed), timed.slice(-200))
         const exit1 = await def.execute({ command: 'exit 3' })
-        ok('非零退出带 failure=EXIT_NONZERO', /\[failure: EXIT_NONZERO; effects: unknown; retry: never\]/.test(exit1), exit1.slice(-160))
+        // 非零退出：**不再**打印恒定的 failure 行（退出码已在头与末行）；其它失败码仍要打印
+        ok('非零退出不打印恒定 failure 行（减少噪声）', !/\[failure: EXIT_NONZERO/.test(exit1), exit1.slice(-160))
         const ctx = { get: (name) => (name === 'sandboxPolicy' ? { resolve: () => ({ mode: 'workspace-write' }) } : undefined) }
         const closed = tools((tool) => tool, { resolveWorkspaceCwd: () => dir7, getCtx: () => ctx, sandboxPlatform: 'win32' })[0]
         const blocked = await closed.execute({ command: 'echo x' })
@@ -635,7 +636,11 @@ console.log('== 22b. 参数错误码 / 未起进程无副作用 / DSH 环境注�
     ok('脚本不存在 ⇒ INVALID_BASH_ARGUMENT', /INVALID_BASH_ARGUMENT/.test(noScript), noScript.slice(-140))
 
     const died = await def.execute({ command: 'exit 9', description: 'nonzero' })
-    ok('起了进程后非零退出 ⇒ effects=unknown（可能有副作用）', /EXIT_NONZERO; effects: unknown/.test(died), died.slice(-120))
+    // 渲染层不再打印恒定 failure 行，但结构化判据仍要正确（另测 failureOf 直接返回 effects=unknown）
+    ok('非零退出：末行仍给退出码', /\[exit code: 9\]/.test(died), died.slice(-120))
+    ok('非零退出：failureOf 给出 effects=unknown（可能有副作用）',
+        bashModule.failureOf({ ok: false, exitCode: 9, started: true })?.effectState === 'unknown',
+        JSON.stringify(bashModule.failureOf({ ok: false, exitCode: 9, started: true })))
 
     // 宿主 shellEnv.collect 的 DSH_* 要真的进到子进程
     const envCtx = { get: (name) => name === 'shellEnv'

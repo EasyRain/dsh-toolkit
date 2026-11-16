@@ -4,6 +4,23 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.12.4 — 2026-11-16（普通非零退出不再打印恒定的 failure 行）
+
+每条失败命令末尾都会挂一句 `[failure: EXIT_NONZERO; effects: unknown; retry: never]` —— 这来自
+`failureOf()` 的失败契约（照 ops）。但**退出码非零这件事，头和末行已经说了**：
+`ok=false exitCode=1` 与 `[exit code: 1]`。剩下的 `effects: unknown; retry: never` 对每条非零命令都
+一模一样，只是固定的噪声（一整天几十条）。
+
+- 渲染层：`code === 'EXIT_NONZERO' && nextAction === undefined` 时**不打印**这一行；
+- 其它失败码（`TIMEOUT` / `SANDBOX_DENIED` / `APPROVAL_*` / `EXECUTOR_UNAVAILABLE` / `SPAWN_FAILED` / `CANCELLED`）
+  都带可执行的 `nextAction`，照旧打印；
+- `failureOf()` 的结构化判据**不变**（`effects` 仍按"是否起过进程"区分 `none`/`unknown`），
+  只是不再把它写进给模型的文本。
+
+顺带把 `docs/TOOLKIT.md` 的"失败契约"一条改成同样口径。
+
+全量 **40 套件 / 1,706 断言**通过；`check-package` 62/62；schema 不变（36,571 B）。
+
 ## 0.12.3 — 2026-11-15（0 命中提示按模式分支：literal 不再让你去跑 ast_test_rule）
 
 复核报告里"最后一条可选提示"：0 命中的回执写着"先用 ast_test_rule 验证"，但那个工具**只吃 AST 规则**，
