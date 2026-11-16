@@ -537,14 +537,14 @@ console.log('== 20. spill 上限 + 结构化失败 ==')
         }
         const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dir7 })[0]
         const timed = await def.execute({ command: 'sleep 5', timeoutMs: 300 })
-        ok('超时失败带 failure=TIMEOUT', /\[failure: TIMEOUT; effects: unknown; retry: after-input-change\]/.test(timed), timed.slice(-200))
+        ok('超时失败带 failure=TIMEOUT', /failure=TIMEOUT/.test(timed) && /nextAction=/.test(timed), timed.slice(-200))
         const exit1 = await def.execute({ command: 'exit 3' })
         // 非零退出：**不再**打印恒定的 failure 行（退出码已在头与末行）；其它失败码仍要打印
         ok('非零退出不打印恒定 failure 行（减少噪声）', !/\[failure: EXIT_NONZERO/.test(exit1), exit1.slice(-160))
         const ctx = { get: (name) => (name === 'sandboxPolicy' ? { resolve: () => ({ mode: 'workspace-write' }) } : undefined) }
         const closed = tools((tool) => tool, { resolveWorkspaceCwd: () => dir7, getCtx: () => ctx, sandboxPlatform: 'win32' })[0]
         const blocked = await closed.execute({ command: 'echo x' })
-        ok('受限模式缺运行时带 failure=EXECUTOR_UNAVAILABLE', /\[failure: EXECUTOR_UNAVAILABLE; effects: none; retry: after-config-change\]/.test(blocked), blocked.slice(-220))
+        ok('受限模式缺运行时带 failure=EXECUTOR_UNAVAILABLE', /failure=EXECUTOR_UNAVAILABLE/.test(blocked), blocked.slice(-220))
     }
     finally { bestEffortRm(dir7) }
 }
@@ -571,7 +571,7 @@ console.log('== 21. 宿主取消（停止按钮）能真正打断 ==')
     pre.abort()
     const preRes = await runBash('echo x', { signal: pre.signal })
     ok('进进程前已取消 ⇒ 直接 cancelled', preRes.ok === false && /cancelled/i.test(preRes.error ?? ''))
-    ok('工具层取消回执带 [aborted] 与 failure=CANCELLED', /\[aborted\]/.test(text) && /\[failure: CANCELLED;/.test(text), text.slice(-200))
+    ok('工具层取消回执带 [aborted] 与 failure=CANCELLED', /\[aborted\]/.test(text) && /failure=CANCELLED/.test(text), text.slice(-200))
 }
 
 console.log('== 22. 逐次升级审批（sandbox_permissions）==')
@@ -618,7 +618,7 @@ console.log('== 22. 逐次升级审批（sandbox_permissions）==')
         const deniedCtx = { get: (name) => name === 'sandboxPolicy' ? { resolve: () => live } : name === 'approval' ? { request: async () => 'denied' } : undefined }
         const defDenied = tools((tool) => tool, { resolveWorkspaceCwd: () => dir8, getCtx: () => deniedCtx, sandboxPlatform: 'win32' })[0]
         const denied = await defDenied.execute({ command: 'echo should-not-run', sandbox_permissions: 'danger-full-access', justification: 'test' }, { agent: { session: { id: 's' } }, callId: 'c2' })
-        ok('拒绝时命令不执行且带 failure=APPROVAL_DENIED', /\[failure: APPROVAL_DENIED;/.test(denied) && !/should-not-run/.test(denied), denied.slice(-200))
+        ok('拒绝时命令不执行且带 failure=APPROVAL_DENIED', /failure=APPROVAL_DENIED/.test(denied) && !/should-not-run/.test(denied), denied.slice(-200))
     }
     finally { bestEffortRm(dir8) }
 }
@@ -627,10 +627,10 @@ console.log('== 22b. 参数错误码 / 未起进程无副作用 / DSH 环境注�
 {
     const def = tools((tool) => tool, { resolveWorkspaceCwd: () => tmpdir() })[0]
     const both = await def.execute({ command: 'echo x', script_path: '/tmp/x.sh', description: 'both' })
-    ok('command + script_path 同时给 ⇒ INVALID_BASH_ARGUMENT', /\[failure: INVALID_BASH_ARGUMENT; effects: none; retry: after-input-change\]/.test(both), both.slice(-160))
+    ok('command + script_path 同时给 ⇒ INVALID_BASH_ARGUMENT', /failure=INVALID_BASH_ARGUMENT/.test(both), both.slice(-160))
 
     const missing = await def.execute({ command: '   ', description: 'empty' })
-    ok('空命令 ⇒ INVALID_BASH_ARGUMENT（且 effects=none）', /INVALID_BASH_ARGUMENT/.test(missing) && /effects: none/.test(missing), missing.slice(-140))
+    ok('空命令 ⇒ INVALID_BASH_ARGUMENT（且 effects=none，写在首行）', /failure=INVALID_BASH_ARGUMENT/.test(missing) && /effects=none/.test(missing), missing.split('\n')[0].slice(0, 140))
 
     const noScript = await def.execute({ script_path: '/definitely/not/here.sh', description: 'noscript' })
     ok('脚本不存在 ⇒ INVALID_BASH_ARGUMENT', /INVALID_BASH_ARGUMENT/.test(noScript), noScript.slice(-140))
@@ -759,7 +759,7 @@ console.log('== 25. 宿主 subprocess 路径（spawn/终止/输出交给宿主�
     const jobsBroken = { start() { return 'job-broken' }, wait() { return Promise.resolve({}) }, remove(id) { removedIds.push(id) } }
     const defBroken = bashModule.tools((tool) => tool, { subprocess: rejecting, getJobs: () => jobsBroken, resolveWorkspaceCwd: () => tmpdir(), ...(TEST_BASH === null ? {} : { bashPath: TEST_BASH }) })[0]
     const brokenText = await defBroken.execute({ command: 'x', description: 'broken' })
-    ok('执行器内部异常 ⇒ SPAWN_FAILED 而不是抛给上层', /\[failure: SPAWN_FAILED/.test(brokenText), brokenText.slice(-160))
+    ok('执行器内部异常 ⇒ SPAWN_FAILED 而不是抛给上层', /failure=SPAWN_FAILED/.test(brokenText), brokenText.slice(-160))
     ok('异常路径也会把已登记的 job 收尾掉（读 + 移除）', removedIds.includes('job-broken') || removedIds.length > 0, JSON.stringify(removedIds))
 
     let liveText = 'partial\n'

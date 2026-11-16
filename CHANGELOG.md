@@ -4,6 +4,33 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.12.5 — 2026-11-16（失败信息并入首行，回执只剩"头 + 正文"两段）
+
+0.12.4 只是不再打印普通非零退出那行；其它失败码仍在**末尾**单挂一行，于是同一条回执可能"前面一串、后面一串"。
+现在统一成：**所有元数据都在首行**，正文（stdout/stderr）另起，结尾只有固定的 `[exit code: N]`。
+
+- 失败字段并入首行：`failure=CODE  effects=…  retry=…  nextAction=…`（只在该码确实带额外信息时出现）；
+- **普通非零退出不加任何字段**（退出码已在 `exitCode=` 与 `[exit code: N]` 里）；
+- 末尾不再有 `[failure: …]` 行；`[aborted]`、`[sandbox: …]`、`diagnostics:` 等既有标记位置不变。
+
+效果：
+
+```text
+ok=false  exitCode=3  timedOut=false  truncated=false  120ms
+--- stderr ---
+boom
+[exit code: 3]
+```
+
+```text
+ok=false  exitCode=?  timedOut=true  truncated=false  60000ms  failure=TIMEOUT  effects=unknown  retry=after-input-change  nextAction=增大 timeoutMs 或改用 background
+[exit code: null]
+```
+
+`docs/TOOLKIT.md` 的失败契约同步。测试断言从 `[failure: …]` 改为首行字段。
+
+全量 **40 套件 / 1,706 断言**通过；`check-package` 62/62；schema 不变（36,571 B）。
+
 ## 0.12.4 — 2026-11-16（普通非零退出不再打印恒定的 failure 行）
 
 每条失败命令末尾都会挂一句 `[failure: EXIT_NONZERO; effects: unknown; retry: never]` —— 这来自
