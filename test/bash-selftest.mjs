@@ -185,7 +185,9 @@ console.log('== 11. 工具定义形状（宿主注册契约）==')
 console.log('== 12. 文本投影 ==')
 {
     const text = renderResult({ ok: true, exitCode: 0, stdout: 'hi\n', stderr: '', timedOut: false, truncated: false, durationMs: 81, bashPath: bash })
-    ok('投影含头部与 stdout 原文', /ok=true/.test(text) && /exitCode=0/.test(text) && /--- stdout ---\nhi/.test(text))
+    // 退出码只在末行（宿主 parseExitStatus 的契约），首行不再重复
+    ok('投影含头部与 stdout 原文', /ok=true/.test(text) && /\[exit code: 0\]$/.test(text) && /--- stdout ---\nhi/.test(text))
+    ok('首行不再重复 exitCode=', !/exitCode=/.test(text), text.split('\n')[0])
     const bad = renderResult({ ok: false, exitCode: 127, stdout: '', stderr: 'nope\n', timedOut: false, truncated: true, durationMs: 3, bashPath: bash })
     ok('空 stdout 不再占一行（无内容就不出现），stderr 原样', !/--- stdout ---/.test(bad) && /--- stderr ---/.test(bad) && /nope/.test(bad) && /truncated/.test(bad))
     ok('默认上限是 2 MB', DEFAULTS.maxOutputBytes === 2 * 1024 * 1024)
@@ -571,7 +573,8 @@ console.log('== 21. 宿主取消（停止按钮）能真正打断 ==')
     pre.abort()
     const preRes = await runBash('echo x', { signal: pre.signal })
     ok('进进程前已取消 ⇒ 直接 cancelled', preRes.ok === false && /cancelled/i.test(preRes.error ?? ''))
-    ok('工具层取消回执带 [aborted] 与 failure=CANCELLED', /\[aborted\]/.test(text) && /failure=CANCELLED/.test(text), text.slice(-200))
+    // 取消/信号这类结局由标志行表达（[aborted] / [killed by signal:]），首行不再重复 failure 字段
+    ok('工具层取消回执带 [aborted]', /\[aborted\]/.test(text) && /ok=false/.test(text), text.split('\n')[0])
 }
 
 console.log('== 22. 逐次升级审批（sandbox_permissions）==')

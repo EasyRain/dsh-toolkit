@@ -58,7 +58,10 @@
 - **编码**：`file replace` 支持 UTF-8/UTF-16/GB18030 等；`ast_edit` 只写回 UTF-8，其它编码会**明确报编码并跳过**。
 - **失败契约**（照 ops）：失败信息写进**首行**（与 `ok=` / `exitCode=` / `timedOut=` 同一行）：
   `failure=CODE  effects=none|unknown  retry=…  nextAction=…`；常见 CODE：`EXECUTOR_UNAVAILABLE` / `SANDBOX_UNAVAILABLE` / `SANDBOX_DENIED` / `TIMEOUT` / `EXIT_NONZERO` / `CANCELLED` / `SPAWN_FAILED`。
-  例外：**普通非零退出不加任何字段** —— 退出码已经在首行 `exitCode=1` 与末行 `[exit code: 1]` 里。
+  这些字段**只在有可执行下一步（nextAction）时才出现**：`EXIT_NONZERO` / `KILLED_BY_SIGNAL` / `CANCELLED` 不加，
+  它们的结局已由末行（`[exit code: N]` / `[killed by signal: X]`）与 `ok=` / `[aborted]` 表达。
+- **退出码只在末行出现一次**：`[exit code: N]` / `[killed by signal: X]` 是宿主 `parseExitStatus()` 的解析契约
+  （它把这行剥掉并显示在 terminal 卡片上；缺了就当 0=成功），所以首行不再重复 `exitCode=` / `signal=`。
   这样一条回执始终只有"首行元数据 + 正文（stdout/stderr）"两段，不会前面挂一串、后面再挂一串。
 - **输出**：默认上限 2 MB，超出置 `truncated:true`，并把**完整输出落盘**（回执给 `spillPath`，用 `file read` 分段看）；stdout/stderr 原样回显，不做转义，`ok` 只在退出码 0 且未超时时为真。**首行不带 bash 路径**（运行时已固定，只在 `includeDiagnostics` 的 `diagnostics: bash=…` 里给）；**空输出不占行**（哪一路没内容就不打那一段，也不再写 `(empty)`）；末行固定是 `[exit code: N]` 或 `[killed by signal: X]`（宿主 terminal 卡片靠它解析）。
 - **参数面（与 ops_bash 对齐）**：`command` / `script_path`（跑现成 `.sh`，与 `command` 二选一）/ `description` / `cwd` / `workdir`（`cwd` 的别名，同时给时 `cwd` 优先）/ `timeoutMs` / `graceMs`（先温和终止，等这么久再强杀整棵树，默认 250 ms）/ `includeDiagnostics`。

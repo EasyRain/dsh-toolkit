@@ -4,6 +4,35 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.12.6 — 2026-11-16（退出码只留末行一处；失败字段只在有下一步时出现）
+
+问：首行已经有 `exitCode=`，为什么末尾还要再来一次？—— 末尾那行**不是装饰**，是宿主的解析契约：
+
+```js
+// 宿主 client 的 parseExitStatus()
+const signal = /\\n\\[killed by signal: ([^\\]\\n]+)\\]$/.exec(text)
+const exit = /\\n\\[exit code: (-?\\d+|null)\\]$/.exec(text)
+// 命中会把这一行**从显示内容里剥掉**，并把 exitCode/signal 交给 terminal 卡片；没命中 ⇒ exitCode 当 0（=成功）
+```
+
+所以：
+
+- **去掉首行的重复**：`exitCode=` / `signal=` 不再出现在头部（唯一权威是末行）；
+- **失败字段只在有可执行下一步（nextAction）时出现**：`EXIT_NONZERO` / `KILLED_BY_SIGNAL` / `CANCELLED` 不加，
+  它们的结局已由末行与 `ok=` / `[aborted]` 表达；
+- 顺带给 `SPAWN_FAILED` 补了 `nextAction`（"先核对命令状态再重试"），这样它作为"真的需要处理"的失败仍会带字段。
+
+四种形状：
+
+```text
+ok=true   timedOut=false  truncated=false  42ms          ← 成功
+ok=false  timedOut=false  truncated=false  90ms          ← 非零退出（结局看末行）
+ok=false  timedOut=true   truncated=false  60000ms  failure=TIMEOUT  effects=unknown  retry=after-input-change  nextAction=…
+ok=false  timedOut=false  truncated=false  90ms          ← 被杀（结局看末行）
+```
+
+`docs/TOOLKIT.md` 同步。全量 **40 套件 / 1,707 断言**通过；`check-package` 62/62；schema 不变（36,571 B）。
+
 ## 0.12.5 — 2026-11-16（失败信息并入首行，回执只剩"头 + 正文"两段）
 
 0.12.4 只是不再打印普通非零退出那行；其它失败码仍在**末尾**单挂一行，于是同一条回执可能"前面一串、后面一串"。
