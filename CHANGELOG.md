@@ -4,6 +4,28 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.12.8 — 2026-11-19（修复下载完成通知里恒定的 "0% … downloading"）
+
+现象：后台下载完成的提示里，`Output:` 永远是第一帧 ——
+
+```text
+background job download-… (download: …safetensors (1132.3 MB)) finished [status: completed, 1132.3 MB done].
+Output:
+0% 0.0 MB/1132.3 MB downloading
+```
+
+原因：宿主的 job 输出环是按 **offset 取增量**（`read(offset) → {text, nextOffset}`），而我们每 500 ms 用
+`progressText.value = line` **整段替换**。第一次泵走 "0% …" 后 `nextOffset` 就记住了长度，之后文本被换成更短的内容，
+`slice(offset)` 只剩空串 ⇒ **环里永远停着第一行**。
+
+- 改成**追加式**日志：`progress.text += line`，offset 单调；
+- 追加**节流**：百分比每 +5 或状态变化才写一行（否则 500 ms 一采会把环堆成几百行、通知拖很长）；
+- 终态行（`done` / `cancelled` / `failed`）一定写，所以通知里能看到最后一行 `100% … done`。
+
+回归 4 条：追加式（前缀不被覆盖且真的增长）、有百分比、`nextOffset` 单调、结算后有终态行。
+
+全量 **40 套件 / 1,711 断言**通过；`check-package` 62/62；schema 不变（36,571 B）。
+
 ## 0.12.7 — 2026-11-19（启动信标带上版本与入口路径；内核 rc.5 兼容性确认）
 
 内核升到 **0.2.2-rc.5**（app 2.0.24-next）后做了一轮兼容性核对：**全部通过**

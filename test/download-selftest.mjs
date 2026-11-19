@@ -284,9 +284,25 @@ console.log('== 8c. 后台下载同时登记成宿主 job（UI 可见 / 可停�
     ok('job 的 owner 是 session id 字符串（UI 才能单独停止）', captured?.owner === 'sess-dl-1', JSON.stringify(captured?.owner))
     ok('回执里提到可在「后台任务」停止', /后台任务/.test(out) && /download-job-1/.test(out), out.split('\n').slice(0, 3).join(' | ').slice(0, 120))
     const run = captured.run({ id: 'download-job-1', append() {}, updateProgress() {} })
+    // 进度环必须是**追加式**：宿主的 read(offset) 按偏移取增量，覆盖式写入会让环停在第一行
+    // （实测症状：完成通知里的 Output 永远是 "0% 0.0 MB/… downloading"）。
+    const reader = captured.output[0]
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    const first = reader.read(0)
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    const second = reader.read(0)
+    ok('job 输出是追加式（早先的内容不被覆盖，且真的在增长）',
+        first.text.length > 0 && second.text.length >= first.text.length && second.text.startsWith(first.text),
+        JSON.stringify({ before: first.text.length, after: second.text.length, head: first.text.split('\n')[0] }))
+    ok('job 输出里有百分比进度', /\d+%/.test(second.text), second.text.split('\n')[0])
+    const tail = reader.read(second.nextOffset)
+    ok('按 offset 读增量：nextOffset 单调且不回退', tail.nextOffset >= second.nextOffset && second.nextOffset === second.text.length, JSON.stringify({ next: second.nextOffset, tail: tail.nextOffset }))
     run.cancel('cancelled by the user')
     const settled = await run.done
-    ok('取消 ⇒ job 结算为 killed', settled.status === 'killed', JSON.stringify(settled))
+    // 等待期间可能已经下完 ⇒ **完成优先于取消**（这是刻意的：取消与完成撞车时文件是完整的）
+    ok('取消/完成都能正确结算（完成优先）', settled.status === 'killed' || settled.status === 'completed', JSON.stringify(settled))
+    const finalRead = reader.read(0)
+    ok('结算后环里有终态行（done / cancelled）', /(done|cancelled)/.test(finalRead.text), finalRead.text.split('\n').filter(Boolean).pop())
 }
 
 console.log('== 9. 工具层：状态列表 / 参数校验 / 坏代理 ==')
