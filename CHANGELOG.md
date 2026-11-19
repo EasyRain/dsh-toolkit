@@ -4,6 +4,30 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.12.7 — 2026-11-19（启动信标带上版本与入口路径；内核 rc.5 兼容性确认）
+
+内核升到 **0.2.2-rc.5**（app 2.0.24-next）后做了一轮兼容性核对：**全部通过**
+（15 个工具全部注册、`sandboxPolicy.resolve()` 形状不变、`/checkpoint` `/rewind` 命令正常、
+自测 40 套件 1,707 断言全绿；`bash` / `file` / `ast_search` / `table_diff` / `session_list` /
+`checkpoint` / `download probe` 都做了真机冒烟）。
+
+升级期间在信标里看到一次真实故障，值得留痕：
+
+```text
+01:44:45.849Z sandbox services: policy=no confine=no
+01:44:46.741Z apply() entered; … config schema: none, volatile 家族开关=0
+01:44:46.748Z search.apply FAILED: Cannot find package 'yaml' imported from D:\…\dsh-toolkit\lib\search.js
+01:44:46.753Z astEdit.apply FAILED: Cannot find package '@ast-grep/napi' …
+```
+
+宿主在插件重载的瞬间从**源码树**解析了 `file:` 依赖（源码树没有 `node_modules`）⇒ ast/search 两族缺依赖注册失败。
+那一轮里安装副本的实例最终胜出（当前 ast 工具都正常），所以没有实际影响。
+
+- 启动信标新增 `ver=` 与 `entry=`：下次一眼就能看出"加载的是安装副本还是源码树、哪个版本"。
+- 顺带确认：即使真有源码树加载，其它 13 个工具也能正常注册（只有依赖外部包的两族会失败），不会整行插件消失。
+
+全量 **40 套件 / 1,707 断言**通过；`check-package` 62/62；schema 不变（36,571 B）。
+
 ## 0.12.6 — 2026-11-16（退出码只留末行一处；失败字段只在有下一步时出现）
 
 问：首行已经有 `exitCode=`，为什么末尾还要再来一次？—— 末尾那行**不是装饰**，是宿主的解析契约：
