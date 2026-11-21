@@ -327,6 +327,20 @@ console.log('== 14f. 前台命令一开始就登记 job（可见/可停），结
     finally { rmSync(dirF, { recursive: true, force: true }) }
 }
 
+console.log('== 14g. 引号未闭合时给可执行提示（Windows 路径尾 \ + "）==')
+{
+    const dirQ = mkdtempSync(join(tmpdir(), 'tk bash quote-'))
+    try {
+        const def = tools((tool) => tool, { resolveWorkspaceCwd: () => dirQ })[0]
+        // 双引号里的 \" 是转义引号 ⇒ 字符串没结束，bash 报 unexpected EOF
+        const text = await def.execute({ command: 'V=$(ls "C:\\Some\\Dir 10\\"*.jar 2>/dev/null); echo "$V"', description: 'quote trap' })
+        ok('引号未闭合 ⇒ 回执带 hint', /\[hint: 引号没闭合/.test(text), text.split('\n').filter((l) => l.includes('hint')).join(' ').slice(0, 80))
+        ok('提示里给了改法（单引号 / 分开写）', /改成|单引号/.test(text), '')
+        ok('提示在末行之前（不破坏 exit code 契约）', /\[hint: [^\]]*\]\n\[exit code: \d+\]$/.test(text), text.slice(-80))
+    }
+    finally { bestEffortRm(dirQ) }
+}
+
 console.log('== 19b. 转后台时撤销 waiter（命令跑完要有完成通知）==')
 {
     const dirW = mkdtempSync(join(tmpdir(), 'tk bash waiter-abort-'))

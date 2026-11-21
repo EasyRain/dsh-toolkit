@@ -4,6 +4,28 @@
 > 本机运维目录下的 `sessions\dsh-plugin\docs\2026-10-10-generic-diff\LOG.md`（不随包发布）。
 > 改动流程：改源码 → 跑 `test/*-selftest.mjs` → **手动同步进 `~\.dsh\profiles\<名>\node_modules\dsh-toolkit`**（profile 的安装副本不会被 `pnpm install file:` 刷新 —— lockfile 条目没变就不动，所以只能手抄或跑 `bin/install-toolkit.mjs`）→ 重启宿主。
 
+## 0.12.9 — 2026-11-21（引号未闭合时给可执行提示：这是 bash 的 POSIX 语义，不是工具的转义 bug）
+
+现象：
+
+```bash
+VJ=$(ls "D:\Game\…\All the Mods 10\"*.jar 2>/dev/null | head -5)
+# → niu: -c: line 1: unexpected EOF while looking for matching `"'
+```
+
+根因是 **POSIX 引号语义**：双引号里只有 `$ ` `` ` `` `"` `\` 换行会被转义，所以 `\"` 是**转义引号**、不结束字符串；
+路径以 `\` 结尾再跟 `"` 时，收尾引号就被吞掉。工具把命令原样交给 `bash -c`（argv 直传、不经 Windows 命令行二次解析），
+所以这不是插件在"转义"上做错了。
+
+但错误信息本身没有告诉模型怎么办，所以：
+
+- 回执遇到 `unexpected EOF while looking for matching` 时，在末行之前加一行
+  `[hint: 引号没闭合 —— 双引号里的 \" 是转义引号…改成 "…\10"/*.jar，或整段用单引号…]`；
+- `docs/TOOLKIT.md` 的 bash 小节记录这条语义与三种写法。
+
+回归 3 条（hint 出现、给了改法、hint 不破坏末行 `[exit code: N]` 契约）。
+全量 **40 套件 / 1,718 断言**通过；`check-package` 62/62；schema 不变（36,571 B）。
+
 ## 0.12.8 — 2026-11-19（修复下载完成通知里恒定的 "0% … downloading"）
 
 现象：后台下载完成的提示里，`Output:` 永远是第一帧 ——

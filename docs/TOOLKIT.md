@@ -26,6 +26,11 @@
 - **什么时候用它**：文本管道（`grep`/`sed`/`awk`/`sort`/`uniq`/`tr`）、通配、以及**引号会被 PowerShell 弄坏**的命令行。
   注册表/服务/ACL/计划任务/WMI ⇒ 走 `powershell.exe -NoProfile -Command "..."`（Windows 上宿主 `pwsh` 工具已被本族隐藏），别在 bash 里绕。
 - **平台**：只在 **Windows** 启用。POSIX 上宿主自带 `bash`，本插件**整个 shell 族不可用**：`familyEnabled('shell')` 直接返回 false（不是注册后再让位），设置页该开关禁用并显示「宿主接管」；`apply()` 在非 win32 返回 0。也因此宿主 UI 会按内置映射把本工具显示成「运行命令」，而不是像 `ops_bash` 那样的通用「调用工具」。
+- **引号语义是 POSIX 的**（argv 直传 `bash -c`，不经 Windows 命令行二次解析）：双引号里的 `\"` 是**转义引号**，
+  所以"路径以 `\` 结尾 + 紧跟 `"`"（如 `"…\All the Mods 10\"*.jar"`）会吞掉收尾引号、报
+  `unexpected EOF while looking for matching` —— 这是 **bash 的行为，不是工具的转义 bug**。
+  回执里遇到这个错误会加一行 `[hint: …]` 给出改法：`"…\10"/*.jar` 或整段用单引号（单引号里 `\` 是字面量）；
+  能读文件就别拼 shell 引号（`file read` / `ast_search`）。
 - **非交互**：stdin 关闭，`read`/`sudo`/`ssh` 这类提示会挂到超时（默认 60 s，最大 600 s）。超时**杀整棵进程树**：先杀 MSYS 进程组（`kill -9 -<pgid>`），再用 `taskkill /T /F` 兜底 —— 只 `child.kill()` 会留孙进程；而 MSYS `fork` 出来的子进程连 `taskkill /T` 都抓不到（它的 Windows PPID 指向已退出的辅助进程），所以必须两路一起。
 - **环境净化（照 ops）**：给子进程固定 `NO_COLOR=1`、`TERM=dumb`、`PAGER=cat`、`GIT_PAGER=cat`、`LC_MESSAGES=C`、`LC_ALL=C.UTF-8` —— 没有 ANSI 序列、不会被 `less` 挂住、错误消息保持英文可解析；`C.UTF-8` 同时保证 `wc -m` 按**字符**而不是字节数中文。
 - **超时 = 中途晋升**（照 ops 的 `promoted`）：前台命令到 `timeoutMs` 仍在跑时**不杀**，转成宿主后台任务，回执 `kind=promoted` + `jobId` + 已产生的部分输出；之后用 `job_output` 读、`job_kill` 停。没有 `jobs` 服务时才退回「杀整棵树 + `timedOut`」。
